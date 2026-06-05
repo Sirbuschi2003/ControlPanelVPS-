@@ -105,26 +105,31 @@ info "Paketlisten aktualisieren..."
 apt-get update
 success "Paketlisten aktualisiert"
 
-# Helper: install packages and free .deb cache (NOT the package lists)
+# pkg_install "Beschreibung" [--flags] paket1 paket2 ...
+# Flags (z.B. --no-install-recommends) werden vor den Paketnamen übergeben.
 pkg_install() {
   local desc="$1"; shift
   echo -e "\n${BLUE}[APT]${NC} ${BOLD}$desc${NC}"
   apt-get install -y "$@"
-  apt-get clean    # nur heruntergeladene .deb-Dateien löschen, NICHT die Listen
+  apt-get clean    # nur .deb-Cache löschen, Paketlisten bleiben erhalten
   success "$desc installiert"
 }
 
 pkg_install "Basis-Tools" \
+  --no-install-recommends \
   curl wget git build-essential ca-certificates gnupg lsb-release \
   htop net-tools unzip jq openssl software-properties-common
 
 pkg_install "PostgreSQL & Redis" \
+  --no-install-recommends \
   postgresql postgresql-contrib redis-server
 
 pkg_install "Nginx & Certbot" \
+  --no-install-recommends \
   nginx certbot python3-certbot-nginx
 
 pkg_install "Sicherheits-Tools (Fail2ban, UFW, unattended-upgrades)" \
+  --no-install-recommends \
   fail2ban ufw unattended-upgrades apt-listchanges
 
 pkg_install "Postfix & Dovecot (Mailserver)" \
@@ -133,6 +138,7 @@ pkg_install "Postfix & Dovecot (Mailserver)" \
   libsasl2-modules libsasl2-modules-db sasl2-bin
 
 pkg_install "DNS-Server (BIND9)" \
+  --no-install-recommends \
   bind9 bind9utils dnsutils
 
 # Rspamd: hat eigenes Repository, da es oft nicht in Standard-Repos ist
@@ -146,7 +152,7 @@ https://rspamd.com/apt-stable/ $(lsb_release -cs) main" \
     > /etc/apt/sources.list.d/rspamd.list
   apt-get update
 fi
-pkg_install "Rspamd (Spam-Filter)" rspamd
+pkg_install "Rspamd (Spam-Filter)" --no-install-recommends rspamd
 
 success "Alle Systempakete installiert"
 
