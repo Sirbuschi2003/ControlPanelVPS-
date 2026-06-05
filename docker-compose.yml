@@ -1,0 +1,71 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cpanel
+      POSTGRES_PASSWORD: cpanel_dev_password
+      POSTGRES_DB: cpanel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cpanel"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass cpanel_dev_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--pass", "cpanel_dev_redis", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  master:
+    build:
+      context: ./master
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cpanel:cpanel_dev_password@postgres:5432/cpanel?sslmode=disable
+      REDIS_URL: redis://:cpanel_dev_redis@redis:6379/0
+      JWT_SECRET: change_this_in_production_32chars_min
+      AGENT_TOKEN: change_this_agent_shared_secret
+      LISTEN_ADDR: :8080
+      ENVIRONMENT: development
+    ports:
+      - "8080:8080"
+
+  agent:
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      MASTER_URL: http://localhost:8080
+      AGENT_TOKEN: change_this_agent_shared_secret
+      LISTEN_ADDR: :8087
+      NODE_ID: local-dev
+    ports:
+      - "8087:8087"
+
+volumes:
+  postgres_data:
+  redis_data:
