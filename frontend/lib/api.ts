@@ -92,6 +92,161 @@ export interface ServerMetrics {
   kernel_version: string;
 }
 
+export interface Website {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  domain: string;
+  php_version: string;
+  document_root: string;
+  aliases: string[];
+  ssl_enabled: boolean;
+  ssl_cert_id?: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface SSLCert {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  domain: string;
+  san_domains: string[];
+  email: string;
+  issuer: string;
+  status: "active" | "pending" | "expired" | "failed";
+  expires_at: string;
+  auto_renew: boolean;
+  created_at: string;
+}
+
+export interface ManagedDatabase {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  name: string;
+  db_type: "mysql" | "postgresql";
+  db_user: string;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface DNSZone {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  name: string;
+  nameserver: string;
+  admin_email: string;
+  serial: number;
+  created_at: string;
+}
+
+export interface DNSRecord {
+  id: string;
+  zone_id: string;
+  name: string;
+  type: "A" | "AAAA" | "CNAME" | "MX" | "TXT" | "SRV" | "CAA";
+  content: string;
+  ttl: number;
+  priority?: number;
+  created_at: string;
+}
+
+export interface MailDomain {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  name: string;
+  created_at: string;
+}
+
+export interface MailAccount {
+  id: string;
+  domain_id: string;
+  domain_name?: string;
+  username: string;
+  quota_mb: number;
+  created_at: string;
+}
+
+export interface MailAlias {
+  id: string;
+  domain_id: string;
+  domain_name?: string;
+  source: string;
+  destination: string;
+  created_at: string;
+}
+
+export interface FirewallRule {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  order: number;
+  action: "allow" | "deny";
+  direction: "in" | "out";
+  protocol: "tcp" | "udp" | "icmp" | "any";
+  source: string;
+  dest_port: string;
+  comment: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface BackupConfig {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  name: string;
+  storage_type: "local" | "s3" | "sftp";
+  schedule: string;
+  retention_days: number;
+  include_paths: string[];
+  encrypt: boolean;
+  enabled: boolean;
+  s3_bucket?: string;
+  s3_region?: string;
+  s3_access_key?: string;
+  sftp_host?: string;
+  sftp_user?: string;
+  sftp_path?: string;
+  created_at: string;
+}
+
+export interface BackupJob {
+  id: string;
+  config_id: string;
+  config_name?: string;
+  status: "running" | "success" | "failed" | "pending";
+  size_bytes: number;
+  started_at: string;
+  finished_at?: string;
+  error?: string;
+}
+
+export interface CronJob {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  name: string;
+  schedule: string;
+  command: string;
+  run_as_user: string;
+  enabled: boolean;
+  last_run?: string;
+  last_status?: "success" | "failed" | "running";
+  created_at: string;
+}
+
+export interface SystemService {
+  name: string;
+  description: string;
+  active: boolean;
+  enabled: boolean;
+  status: string;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;

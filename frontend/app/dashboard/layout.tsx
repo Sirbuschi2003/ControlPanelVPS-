@@ -7,6 +7,7 @@ import {
   Server,
   LayoutDashboard,
   Globe,
+  Globe2,
   Database,
   Mail,
   Shield,
@@ -16,18 +17,33 @@ import {
   LogOut,
   ChevronLeft,
   Activity,
+  Lock,
+  Clock,
+  FileText,
+  Folder,
+  Users,
+  ArrowUpCircle,
 } from "lucide-react";
 import { api, type User } from "@/lib/api";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Übersicht" },
   { href: "/dashboard/servers", icon: Server, label: "Server" },
-  { href: "/dashboard/websites", icon: Globe, label: "Websites", disabled: true },
-  { href: "/dashboard/databases", icon: Database, label: "Datenbanken", disabled: true },
-  { href: "/dashboard/mail", icon: Mail, label: "E-Mail", disabled: true },
-  { href: "/dashboard/firewall", icon: Shield, label: "Firewall", disabled: true },
-  { href: "/dashboard/backups", icon: HardDrive, label: "Backups", disabled: true },
-  { href: "/dashboard/terminal", icon: Terminal, label: "Terminal", disabled: true },
+  { href: "/dashboard/websites", icon: Globe, label: "Websites" },
+  { href: "/dashboard/ssl", icon: Lock, label: "SSL/TLS" },
+  { href: "/dashboard/databases", icon: Database, label: "Datenbanken" },
+  { href: "/dashboard/dns", icon: Globe2, label: "DNS" },
+  { href: "/dashboard/mail", icon: Mail, label: "E-Mail" },
+  { href: "/dashboard/firewall", icon: Shield, label: "Firewall" },
+  { href: "/dashboard/backups", icon: HardDrive, label: "Backups" },
+  { href: "/dashboard/services", icon: Activity, label: "Dienste" },
+  { href: "/dashboard/crons", icon: Clock, label: "Cron Jobs" },
+  { href: "/dashboard/logs", icon: FileText, label: "Logs" },
+  { href: "/dashboard/files", icon: Folder, label: "Dateien" },
+  { href: "/dashboard/terminal", icon: Terminal, label: "Terminal" },
+  { href: "/dashboard/users", icon: Users, label: "Benutzer" },
+  { href: "/dashboard/updates", icon: ArrowUpCircle, label: "Updates" },
+  { href: "/dashboard/settings", icon: Settings, label: "Einstellungen" },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -78,27 +94,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Nav */}
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-          {navItems.map(({ href, icon: Icon, label, disabled }) => {
-            const active = pathname === href;
+          {navItems.map(({ href, icon: Icon, label }) => {
+            const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
             return (
               <Link
                 key={href}
-                href={disabled ? "#" : href}
+                href={href}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
-                  disabled
-                    ? "opacity-40 cursor-not-allowed text-muted-foreground"
-                    : active
+                  active
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:text-foreground hover:bg-accent"
                 }`}
-                onClick={(e) => disabled && e.preventDefault()}
                 title={collapsed ? label : undefined}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 {!collapsed && <span>{label}</span>}
-                {!collapsed && disabled && (
-                  <span className="ml-auto text-xs text-muted-foreground/50">bald</span>
-                )}
               </Link>
             );
           })}
@@ -106,14 +116,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* Footer */}
         <div className="border-t border-border p-2">
-          <Link
-            href="/dashboard/settings"
-            className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            title={collapsed ? "Einstellungen" : undefined}
-          >
-            <Settings className="w-4 h-4 flex-shrink-0" />
-            {!collapsed && <span>Einstellungen</span>}
-          </Link>
           <button
             onClick={logout}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
