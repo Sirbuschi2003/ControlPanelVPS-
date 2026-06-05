@@ -30,20 +30,32 @@ info "Betriebssystem erkannt: $PRETTY_NAME"
 [[ "$ID" =~ ^(ubuntu|debian)$ ]] || error "Nicht unterstütztes OS. Nutze Ubuntu 22.04/24.04/26.04 oder Debian 12."
 
 # ── Interactive setup ────────────────────────────────────────────────────────
+# Bei "curl | bash" ist stdin die Pipe — wir müssen explizit vom Terminal lesen
+exec </dev/tty
+
 echo ""
 echo -e "${BLUE}${BOLD}╔════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}${BOLD}║     ControlPanelVPS — Installation     ║${NC}"
 echo -e "${BLUE}${BOLD}╚════════════════════════════════════════╝${NC}"
 echo ""
 
-read -rp "Panel-Domain (z.B. panel.example.com): " PANEL_DOMAIN
-[[ -n "$PANEL_DOMAIN" ]] || error "Domain darf nicht leer sein"
+while true; do
+  read -rp "Panel-Domain (z.B. panel.example.com): " PANEL_DOMAIN
+  [[ -n "$PANEL_DOMAIN" ]] && break
+  echo -e "${RED}Fehler:${NC} Domain darf nicht leer sein."
+done
 
-read -rp "Admin-E-Mail: " ADMIN_EMAIL
-[[ -n "$ADMIN_EMAIL" ]] || error "E-Mail darf nicht leer sein"
+while true; do
+  read -rp "Admin-E-Mail: " ADMIN_EMAIL
+  [[ "$ADMIN_EMAIL" == *@*.* ]] && break
+  echo -e "${RED}Fehler:${NC} Keine gültige E-Mail-Adresse."
+done
 
-read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD; echo
-[[ ${#ADMIN_PASSWORD} -ge 12 ]] || error "Passwort zu kurz (min. 12 Zeichen)"
+while true; do
+  read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD; echo
+  [[ ${#ADMIN_PASSWORD} -ge 12 ]] && break
+  echo -e "${RED}Fehler:${NC} Passwort zu kurz (min. 12 Zeichen)."
+done
 
 # Generate secrets
 JWT_SECRET=$(openssl rand -hex 32)
