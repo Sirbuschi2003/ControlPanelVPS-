@@ -208,6 +208,10 @@ if [[ -d "$INSTALL_DIR/.git" ]]; then
   git -C "$INSTALL_DIR" pull --rebase
   success "Repository aktualisiert"
 else
+  if [[ -d "$INSTALL_DIR" ]]; then
+    info "Altes Verzeichnis $INSTALL_DIR (kein Git-Repo) wird entfernt..."
+    rm -rf "$INSTALL_DIR"
+  fi
   info "Klone $REPO ..."
   git clone "$REPO" "$INSTALL_DIR"
   success "Repository geklont nach $INSTALL_DIR"
