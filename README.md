@@ -40,13 +40,13 @@ Default credentials: `admin@panel.local` / `changeme`
 Single server (recommended for starting out):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sirbuschi2003/ControlPanelVPS-/main/deploy/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Sirbuschi2003/ControlPanelVPS-/master/deploy/install.sh | bash
 ```
 
 Add a second server later:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Sirbuschi2003/ControlPanelVPS-/main/deploy/install-agent.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/Sirbuschi2003/ControlPanelVPS-/master/deploy/install-agent.sh | bash -s -- \
   --master https://panel.yourdomain.com \
   --token YOUR_AGENT_TOKEN
 ```
