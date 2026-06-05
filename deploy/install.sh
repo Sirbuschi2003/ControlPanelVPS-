@@ -205,7 +205,8 @@ success "Verzeichnisse angelegt"
 step "Repository klonen / aktualisieren"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   info "Existierendes Repository wird aktualisiert..."
-  git -C "$INSTALL_DIR" pull --rebase
+  git -C "$INSTALL_DIR" reset --hard HEAD
+  git -C "$INSTALL_DIR" pull
   success "Repository aktualisiert"
 else
   if [[ -d "$INSTALL_DIR" ]]; then
