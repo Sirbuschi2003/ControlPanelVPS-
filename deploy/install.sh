@@ -30,8 +30,9 @@ info "Betriebssystem erkannt: $PRETTY_NAME"
 [[ "$ID" =~ ^(ubuntu|debian)$ ]] || error "Nicht unterstütztes OS. Nutze Ubuntu 22.04/24.04/26.04 oder Debian 12."
 
 # ── Interactive setup ────────────────────────────────────────────────────────
-# Bei "curl | bash" ist stdin die Pipe — wir müssen explizit vom Terminal lesen
-exec </dev/tty
+# Bei "curl | bash" liest bash das Script von stdin (der Pipe).
+# exec </dev/tty würde bash dazu bringen, die nächsten Script-Zeilen vom
+# Terminal zu lesen → Script bricht. Stattdessen: </dev/tty pro read-Aufruf.
 
 echo ""
 echo -e "${BLUE}${BOLD}╔════════════════════════════════════════╗${NC}"
@@ -40,19 +41,20 @@ echo -e "${BLUE}${BOLD}╚══════════════════
 echo ""
 
 while true; do
-  read -rp "Panel-Domain (z.B. panel.example.com): " PANEL_DOMAIN
+  read -rp "Panel-Domain (z.B. panel.example.com): " PANEL_DOMAIN </dev/tty
   [[ -n "$PANEL_DOMAIN" ]] && break
   echo -e "${RED}Fehler:${NC} Domain darf nicht leer sein."
 done
 
 while true; do
-  read -rp "Admin-E-Mail: " ADMIN_EMAIL
+  read -rp "Admin-E-Mail: " ADMIN_EMAIL </dev/tty
   [[ "$ADMIN_EMAIL" == *@*.* ]] && break
   echo -e "${RED}Fehler:${NC} Keine gültige E-Mail-Adresse."
 done
 
 while true; do
-  read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD; echo
+  read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD </dev/tty
+  echo
   [[ ${#ADMIN_PASSWORD} -ge 12 ]] && break
   echo -e "${RED}Fehler:${NC} Passwort zu kurz (min. 12 Zeichen)."
 done
@@ -102,6 +104,9 @@ info "Paketinstallation vorkonfigurieren..."
 } | debconf-set-selections
 
 info "Paketlisten aktualisieren..."
+# Cached pages freigeben bevor apt lädt (wichtig bei kleinem RAM)
+sync
+echo 1 > /proc/sys/vm/drop_caches
 apt-get update
 success "Paketlisten aktualisiert"
 
