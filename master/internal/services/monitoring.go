@@ -38,15 +38,13 @@ func (s *MonitoringService) HealthCheck(ctx context.Context, serverID string) (*
 	if err != nil {
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
-	c := agent.NewClient(agentURL, token)
-	resp, err := c.Get(ctx, "/monitoring/health")
+	c := agent.NewAgentClient(agentURL, token)
+	data, err := c.Get(ctx, "/monitoring/health")
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
-	defer resp.Body.Close()
-
 	var report HealthReport
-	if err := json.NewDecoder(resp.Body).Decode(&report); err != nil {
+	if err := json.Unmarshal(data, &report); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	report.ServerID = serverID
@@ -58,18 +56,16 @@ func (s *MonitoringService) SetupMailTLS(ctx context.Context, serverID, hostname
 	if err != nil {
 		return fmt.Errorf("server not found: %w", err)
 	}
-	c := agent.NewClient(agentURL, token)
+	c := agent.NewAgentClient(agentURL, token)
 	body := map[string]string{
 		"hostname":  hostname,
 		"cert_path": certPath,
 		"key_path":  keyPath,
 	}
-	data, _ := json.Marshal(body)
-	resp, err := c.Post(ctx, "/mail/setup-tls", "application/json", data)
+	_, err = c.Post(ctx, "/mail/setup-tls", body)
 	if err != nil {
 		return fmt.Errorf("agent error: %w", err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
@@ -78,12 +74,11 @@ func (s *MonitoringService) SetupRspamd(ctx context.Context, serverID string) er
 	if err != nil {
 		return fmt.Errorf("server not found: %w", err)
 	}
-	c := agent.NewClient(agentURL, token)
-	resp, err := c.Post(ctx, "/mail/setup-rspamd", "application/json", []byte("{}"))
+	c := agent.NewAgentClient(agentURL, token)
+	_, err = c.Post(ctx, "/mail/setup-rspamd", nil)
 	if err != nil {
 		return fmt.Errorf("agent error: %w", err)
 	}
-	resp.Body.Close()
 	return nil
 }
 
@@ -92,15 +87,13 @@ func (s *MonitoringService) SetupDKIM(ctx context.Context, serverID, domain stri
 	if err != nil {
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
-	c := agent.NewClient(agentURL, token)
-	resp, err := c.Post(ctx, "/mail/dkim/"+domain, "application/json", []byte("{}"))
+	c := agent.NewAgentClient(agentURL, token)
+	data, err := c.Post(ctx, "/mail/dkim/"+domain, nil)
 	if err != nil {
 		return nil, fmt.Errorf("agent error: %w", err)
 	}
-	defer resp.Body.Close()
-
 	var result map[string]string
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return result, nil
@@ -111,15 +104,13 @@ func (s *MonitoringService) GetRspamdStatus(ctx context.Context, serverID string
 	if err != nil {
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
-	c := agent.NewClient(agentURL, token)
-	resp, err := c.Get(ctx, "/mail/rspamd/status")
+	c := agent.NewAgentClient(agentURL, token)
+	data, err := c.Get(ctx, "/mail/rspamd/status")
 	if err != nil {
 		return nil, fmt.Errorf("agent error: %w", err)
 	}
-	defer resp.Body.Close()
-
 	var result map[string]any
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if err := json.Unmarshal(data, &result); err != nil {
 		return nil, fmt.Errorf("decode response: %w", err)
 	}
 	return result, nil
