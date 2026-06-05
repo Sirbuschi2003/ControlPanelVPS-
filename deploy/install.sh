@@ -260,8 +260,8 @@ success ".env geschrieben"
 # ── Build Master ──────────────────────────────────────────────────────────────
 step "Master-API kompilieren (Go)"
 cd "$INSTALL_DIR/master"
-info "Abhängigkeiten herunterladen..."
-/usr/local/go/bin/go mod download
+info "Abhängigkeiten auflösen (go mod tidy)..."
+/usr/local/go/bin/go mod tidy
 info "Kompilieren — das dauert 1-3 Minuten..."
 /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
 success "Master-API kompiliert: $INSTALL_DIR/bin/master"
@@ -269,8 +269,8 @@ success "Master-API kompiliert: $INSTALL_DIR/bin/master"
 # ── Build Agent ───────────────────────────────────────────────────────────────
 step "Agent kompilieren (Go)"
 cd "$INSTALL_DIR/agent"
-info "Abhängigkeiten herunterladen..."
-/usr/local/go/bin/go mod download
+info "Abhängigkeiten auflösen (go mod tidy)..."
+/usr/local/go/bin/go mod tidy
 info "Kompilieren..."
 /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
 success "Agent kompiliert: $INSTALL_DIR/bin/agent"
