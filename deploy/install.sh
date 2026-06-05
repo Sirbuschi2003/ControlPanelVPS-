@@ -206,6 +206,8 @@ step "Repository klonen / aktualisieren"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
   info "Existierendes Repository wird aktualisiert..."
   git -C "$INSTALL_DIR" reset --hard HEAD
+  # go mod tidy generates go.sum (untracked) — remove before pull to avoid conflicts
+  rm -f "$INSTALL_DIR/master/go.sum" "$INSTALL_DIR/agent/go.sum"
   git -C "$INSTALL_DIR" pull
   success "Repository aktualisiert"
 else
@@ -261,19 +263,15 @@ success ".env geschrieben"
 # ── Build Master ──────────────────────────────────────────────────────────────
 step "Master-API kompilieren (Go)"
 cd "$INSTALL_DIR/master"
-info "Abhängigkeiten auflösen (go mod tidy)..."
-/usr/local/go/bin/go mod tidy
-info "Kompilieren — das dauert 1-3 Minuten..."
-/usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
+info "Abhängigkeiten herunterladen und kompilieren — dauert 1-3 Minuten..."
+GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
 success "Master-API kompiliert: $INSTALL_DIR/bin/master"
 
 # ── Build Agent ───────────────────────────────────────────────────────────────
 step "Agent kompilieren (Go)"
 cd "$INSTALL_DIR/agent"
-info "Abhängigkeiten auflösen (go mod tidy)..."
-/usr/local/go/bin/go mod tidy
 info "Kompilieren..."
-/usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
+GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
 success "Agent kompiliert: $INSTALL_DIR/bin/agent"
 
 # ── Build Frontend ────────────────────────────────────────────────────────────
