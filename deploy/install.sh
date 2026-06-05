@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# ControlPanelVPS — Full Installation Script (Master + Agent on same server)
-# Supports: Ubuntu 22.04, Ubuntu 24.04, Debian 12
+# ControlPanelVPS — Full Installation Script
+# Supports: Ubuntu 22.04, Ubuntu 24.04, Ubuntu 26.04, Debian 12
 set -euo pipefail
 
 REPO="https://github.com/Sirbuschi2003/ControlPanelVPS-"
@@ -10,47 +10,40 @@ LOG_DIR="/var/log/controlpanel"
 GO_VERSION="1.22.4"
 NODE_VERSION="22"
 
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
+BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+
 info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
 success() { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
-step()    { echo -e "\n${CYAN}━━━ $* ━━━${NC}"; }
-
-# apt wrapper: shows a spinner + package name, no suppressed output
-apt_install() {
-  local desc="$1"; shift
-  echo -e "${BLUE}[APT]${NC}   $desc"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@"
-  echo -e "${GREEN}[OK]${NC}    $desc installiert"
-  # Free apt cache after each group to save RAM
-  apt-get clean
-  rm -rf /var/lib/apt/lists/*
-}
+step()    { echo -e "\n${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"; \
+            echo -e "${CYAN}${BOLD}  $*${NC}"; \
+            echo -e "${CYAN}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"; }
 
 # ── Root check ──────────────────────────────────────────────────────────────
-[[ $EUID -eq 0 ]] || error "Run as root: sudo bash install.sh"
+[[ $EUID -eq 0 ]] || error "Als root ausführen: sudo bash install.sh"
 
 # ── OS check ────────────────────────────────────────────────────────────────
 . /etc/os-release
-info "Detected: $PRETTY_NAME"
-[[ "$ID" =~ ^(ubuntu|debian)$ ]] || error "Unsupported OS. Use Ubuntu 22.04/24.04 or Debian 12."
+info "Betriebssystem erkannt: $PRETTY_NAME"
+[[ "$ID" =~ ^(ubuntu|debian)$ ]] || error "Nicht unterstütztes OS. Nutze Ubuntu 22.04/24.04/26.04 oder Debian 12."
 
 # ── Interactive setup ────────────────────────────────────────────────────────
 echo ""
-echo -e "${BLUE}╔════════════════════════════════════════╗${NC}"
-echo -e "${BLUE}║     ControlPanelVPS — Installation     ║${NC}"
-echo -e "${BLUE}╚════════════════════════════════════════╝${NC}"
+echo -e "${BLUE}${BOLD}╔════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}${BOLD}║     ControlPanelVPS — Installation     ║${NC}"
+echo -e "${BLUE}${BOLD}╚════════════════════════════════════════╝${NC}"
 echo ""
 
-read -rp "Panel domain (e.g. panel.example.com): " PANEL_DOMAIN
-[[ -n "$PANEL_DOMAIN" ]] || error "Domain cannot be empty"
+read -rp "Panel-Domain (z.B. panel.example.com): " PANEL_DOMAIN
+[[ -n "$PANEL_DOMAIN" ]] || error "Domain darf nicht leer sein"
 
-read -rp "Admin email: " ADMIN_EMAIL
-[[ -n "$ADMIN_EMAIL" ]] || error "Email cannot be empty"
+read -rp "Admin-E-Mail: " ADMIN_EMAIL
+[[ -n "$ADMIN_EMAIL" ]] || error "E-Mail darf nicht leer sein"
 
-read -rsp "Admin password (min 12 chars): " ADMIN_PASSWORD; echo
-[[ ${#ADMIN_PASSWORD} -ge 12 ]] || error "Password too short (min 12 chars)"
+read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD; echo
+[[ ${#ADMIN_PASSWORD} -ge 12 ]] || error "Passwort zu kurz (min. 12 Zeichen)"
 
 # Generate secrets
 JWT_SECRET=$(openssl rand -hex 32)
@@ -58,114 +51,169 @@ AGENT_TOKEN=$(openssl rand -hex 24)
 DB_PASSWORD=$(openssl rand -hex 16)
 
 echo ""
-info "Starting installation..."
+info "Starte Installation für: ${BOLD}$PANEL_DOMAIN${NC}"
 echo ""
 
-# ── System packages (in groups to avoid OOM on small VPS) ────────────────────
-step "Systempakete installieren"
-info "Paketlisten aktualisieren (apt-get update)..."
-apt-get update -o Dpkg::Progress-Fancy="1"
-success "Paketlisten aktualisiert"
+# ── SWAP (prevent OOM on small VPS) ─────────────────────────────────────────
+step "Swap-Speicher prüfen / anlegen"
+TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
+CURRENT_SWAP=$(free -m | awk '/^Swap:/{print $2}')
+info "RAM: ${TOTAL_RAM_MB} MB  |  Swap: ${CURRENT_SWAP} MB"
 
-apt_install "Basis-Tools (curl, git, build-essential, openssl)" \
-  curl wget git build-essential ca-certificates gnupg lsb-release \
-  htop net-tools unzip jq openssl
-
-apt_install "Datenbank & Cache (PostgreSQL, Redis)" \
-  postgresql postgresql-contrib redis-server
-
-apt_install "Webserver & SSL (Nginx, Certbot)" \
-  nginx certbot python3-certbot-nginx
-
-apt_install "Sicherheit (Fail2ban, UFW, unattended-upgrades)" \
-  fail2ban ufw unattended-upgrades apt-listchanges
-
-apt_install "Mailserver (Postfix, Dovecot)" \
-  postfix postfix-mysql dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd
-
-# Rspamd: needs own repo on older systems
-if apt-cache show rspamd &>/dev/null 2>&1; then
-  apt_install "Spam-Filter (Rspamd)" rspamd
+if [[ $CURRENT_SWAP -lt 512 ]]; then
+  if [[ ! -f /swapfile ]]; then
+    info "Lege 2 GB Swap-Datei an (verhindert OOM beim Kompilieren)..."
+    fallocate -l 2G /swapfile 2>/dev/null || dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
+    chmod 600 /swapfile
+    mkswap /swapfile
+    swapon /swapfile
+    echo '/swapfile none swap sw 0 0' >> /etc/fstab
+    success "Swap angelegt: 2 GB"
+  else
+    swapon /swapfile 2>/dev/null || true
+    success "Swap bereits vorhanden, aktiviert"
+  fi
 else
-  info "Rspamd-Repository einrichten..."
-  curl -fsSL https://rspamd.com/apt-stable/gpg.key | gpg --dearmor -o /usr/share/keyrings/rspamd-archive-keyring.gpg
-  echo "deb [signed-by=/usr/share/keyrings/rspamd-archive-keyring.gpg] https://rspamd.com/apt-stable/ $(lsb_release -cs) main" \
-    > /etc/apt/sources.list.d/rspamd.list
-  apt-get update
-  apt_install "Spam-Filter (Rspamd)" rspamd
+  success "Ausreichend Swap vorhanden (${CURRENT_SWAP} MB)"
 fi
 
-apt_install "DNS-Server (BIND9)" bind9 bind9utils
+# ── System packages ──────────────────────────────────────────────────────────
+step "Systempakete installieren"
+
+export DEBIAN_FRONTEND=noninteractive
+
+# Pre-seed Postfix so it doesn't ask interactive questions
+info "Paketinstallation vorkonfigurieren..."
+{
+  echo "postfix postfix/main_mailer_type select Internet Site"
+  echo "postfix postfix/mailname string $PANEL_DOMAIN"
+} | debconf-set-selections
+
+info "Paketlisten aktualisieren..."
+apt-get update
+success "Paketlisten aktualisiert"
+
+# Helper: install packages and free .deb cache (NOT the package lists)
+pkg_install() {
+  local desc="$1"; shift
+  echo -e "\n${BLUE}[APT]${NC} ${BOLD}$desc${NC}"
+  apt-get install -y "$@"
+  apt-get clean    # nur heruntergeladene .deb-Dateien löschen, NICHT die Listen
+  success "$desc installiert"
+}
+
+pkg_install "Basis-Tools" \
+  curl wget git build-essential ca-certificates gnupg lsb-release \
+  htop net-tools unzip jq openssl software-properties-common
+
+pkg_install "PostgreSQL & Redis" \
+  postgresql postgresql-contrib redis-server
+
+pkg_install "Nginx & Certbot" \
+  nginx certbot python3-certbot-nginx
+
+pkg_install "Sicherheits-Tools (Fail2ban, UFW, unattended-upgrades)" \
+  fail2ban ufw unattended-upgrades apt-listchanges
+
+pkg_install "Postfix & Dovecot (Mailserver)" \
+  postfix postfix-mysql \
+  dovecot-core dovecot-imapd dovecot-pop3d dovecot-lmtpd \
+  libsasl2-modules libsasl2-modules-db sasl2-bin
+
+pkg_install "DNS-Server (BIND9)" \
+  bind9 bind9utils dnsutils
+
+# Rspamd: hat eigenes Repository, da es oft nicht in Standard-Repos ist
+info "Rspamd-Repository einrichten..."
+if ! apt-cache show rspamd >/dev/null 2>&1 || \
+   [[ "$(apt-cache policy rspamd 2>/dev/null | grep Candidate | awk '{print $2}')" == "(none)" ]]; then
+  curl -fsSL https://rspamd.com/apt-stable/gpg.key \
+    | gpg --dearmor -o /usr/share/keyrings/rspamd-archive-keyring.gpg
+  echo "deb [signed-by=/usr/share/keyrings/rspamd-archive-keyring.gpg] \
+https://rspamd.com/apt-stable/ $(lsb_release -cs) main" \
+    > /etc/apt/sources.list.d/rspamd.list
+  apt-get update
+fi
+pkg_install "Rspamd (Spam-Filter)" rspamd
 
 success "Alle Systempakete installiert"
 
 # ── Go ───────────────────────────────────────────────────────────────────────
-step "Go installieren"
-if ! command -v go &>/dev/null || [[ "$(go version | awk '{print $3}')" != "go${GO_VERSION}" ]]; then
+step "Go ${GO_VERSION} installieren"
+export PATH=$PATH:/usr/local/go/bin
+
+if command -v go &>/dev/null && go version | grep -q "go${GO_VERSION}"; then
+  success "Go bereits installiert: $(go version)"
+else
   info "Go ${GO_VERSION} herunterladen..."
   ARCH=$(dpkg --print-architecture)
   [[ "$ARCH" == "amd64" ]] && GOARCH="amd64" || GOARCH="arm64"
-  curl -fsSL --progress-bar "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz" -o /tmp/go.tar.gz
-  info "Go entpacken..."
+  curl -fL --progress-bar \
+    "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz" \
+    -o /tmp/go.tar.gz
+  info "Go entpacken nach /usr/local/go ..."
   rm -rf /usr/local/go
   tar -C /usr/local -xzf /tmp/go.tar.gz
   rm /tmp/go.tar.gz
   echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-  export PATH=$PATH:/usr/local/go/bin
-  success "Go $(go version | awk '{print $3}') installiert"
-else
-  export PATH=$PATH:/usr/local/go/bin
-  success "Go bereits installiert: $(go version | awk '{print $3}')"
+  success "Go installiert: $(go version)"
 fi
 
 # ── Node.js ──────────────────────────────────────────────────────────────────
-step "Node.js installieren"
-if ! command -v node &>/dev/null; then
+step "Node.js ${NODE_VERSION} installieren"
+if command -v node &>/dev/null && node --version | grep -q "^v${NODE_VERSION}"; then
+  success "Node.js bereits installiert: $(node --version)"
+else
   info "NodeSource-Repository einrichten..."
   curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
-  info "Node.js installieren..."
-  DEBIAN_FRONTEND=noninteractive apt-get install -y nodejs
-  success "Node.js $(node --version) / npm $(npm --version) installiert"
-else
-  success "Node.js bereits installiert: $(node --version)"
+  apt-get install -y nodejs
+  apt-get clean
+  success "Node.js $(node --version) installiert"
 fi
 
-# ── Directories ───────────────────────────────────────────────────────────────
-step "Verzeichnisse und Benutzer anlegen"
+# ── Directories & User ───────────────────────────────────────────────────────
+step "Verzeichnisse anlegen"
 mkdir -p "$INSTALL_DIR/bin" "$DATA_DIR" "$LOG_DIR"
 useradd -r -s /bin/false -d "$INSTALL_DIR" cpanel 2>/dev/null || true
-success "Verzeichnisse angelegt: $INSTALL_DIR"
+chown cpanel:cpanel "$LOG_DIR"
+success "Verzeichnisse angelegt"
 
 # ── Clone repo ────────────────────────────────────────────────────────────────
-step "Repository klonen"
+step "Repository klonen / aktualisieren"
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Repository bereits vorhanden — aktualisiere..."
+  info "Existierendes Repository wird aktualisiert..."
   git -C "$INSTALL_DIR" pull --rebase
   success "Repository aktualisiert"
 else
-  info "Klone $REPO nach $INSTALL_DIR ..."
+  info "Klone $REPO ..."
   git clone "$REPO" "$INSTALL_DIR"
-  success "Repository geklont"
+  success "Repository geklont nach $INSTALL_DIR"
 fi
 
 # ── PostgreSQL ────────────────────────────────────────────────────────────────
 step "PostgreSQL konfigurieren"
 systemctl start postgresql
 systemctl enable postgresql
-info "Datenbankbenutzer und Datenbank anlegen..."
-sudo -u postgres psql -c "CREATE USER cpanel WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null || \
-  sudo -u postgres psql -c "ALTER USER cpanel WITH PASSWORD '$DB_PASSWORD';"
+info "Datenbankbenutzer 'cpanel' anlegen..."
+sudo -u postgres psql -c "CREATE USER cpanel WITH PASSWORD '$DB_PASSWORD';" 2>/dev/null \
+  || sudo -u postgres psql -c "ALTER USER cpanel WITH PASSWORD '$DB_PASSWORD';"
 sudo -u postgres psql -c "CREATE DATABASE cpanel OWNER cpanel;" 2>/dev/null || true
 success "PostgreSQL konfiguriert"
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
 step "Redis konfigurieren"
 REDIS_PASSWORD=$(openssl rand -hex 16)
-sed -i "s/# requirepass foobared/requirepass $REDIS_PASSWORD/" /etc/redis/redis.conf
-sed -i "s/requirepass .*/requirepass $REDIS_PASSWORD/" /etc/redis/redis.conf
+# Idempotent: replace existing requirepass or add new one
+if grep -q "^requirepass " /etc/redis/redis.conf; then
+  sed -i "s|^requirepass .*|requirepass $REDIS_PASSWORD|" /etc/redis/redis.conf
+elif grep -q "^# requirepass foobared" /etc/redis/redis.conf; then
+  sed -i "s|^# requirepass foobared|requirepass $REDIS_PASSWORD|" /etc/redis/redis.conf
+else
+  echo "requirepass $REDIS_PASSWORD" >> /etc/redis/redis.conf
+fi
 systemctl restart redis-server
 systemctl enable redis-server
-success "Redis konfiguriert (Passwort gesetzt)"
+success "Redis konfiguriert"
 
 # ── Environment file ──────────────────────────────────────────────────────────
 step "Konfigurationsdatei schreiben"
@@ -180,38 +228,38 @@ PANEL_DOMAIN=${PANEL_DOMAIN}
 ADMIN_EMAIL=${ADMIN_EMAIL}
 EOF
 chmod 600 "$INSTALL_DIR/.env"
-success ".env geschrieben: $INSTALL_DIR/.env"
+success ".env geschrieben"
 
 # ── Build Master ──────────────────────────────────────────────────────────────
-step "Master-API kompilieren"
-info "Go-Abhängigkeiten herunterladen..."
+step "Master-API kompilieren (Go)"
 cd "$INSTALL_DIR/master"
+info "Abhängigkeiten herunterladen..."
 /usr/local/go/bin/go mod download
-info "Master-Binary kompilieren (das kann 1-2 Minuten dauern)..."
+info "Kompilieren — das dauert 1-3 Minuten..."
 /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
-success "Master-API kompiliert → $INSTALL_DIR/bin/master"
+success "Master-API kompiliert: $INSTALL_DIR/bin/master"
 
 # ── Build Agent ───────────────────────────────────────────────────────────────
-step "Agent kompilieren"
-info "Go-Abhängigkeiten herunterladen..."
+step "Agent kompilieren (Go)"
 cd "$INSTALL_DIR/agent"
+info "Abhängigkeiten herunterladen..."
 /usr/local/go/bin/go mod download
-info "Agent-Binary kompilieren..."
+info "Kompilieren..."
 /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
-success "Agent kompiliert → $INSTALL_DIR/bin/agent"
+success "Agent kompiliert: $INSTALL_DIR/bin/agent"
 
 # ── Build Frontend ────────────────────────────────────────────────────────────
-step "Frontend bauen (Next.js)"
+step "Frontend bauen (Next.js) — dauert 2-5 Minuten"
 cd "$INSTALL_DIR/frontend"
 info "npm-Pakete installieren..."
-npm ci
-info "Next.js-Build starten (2-5 Minuten)..."
+npm ci --prefer-offline
+info "Next.js Production-Build..."
 NEXT_PUBLIC_API_URL="https://${PANEL_DOMAIN}" npm run build
 success "Frontend gebaut"
 
 # ── Systemd: Master ───────────────────────────────────────────────────────────
 step "Systemd-Dienste einrichten"
-info "Service-Dateien schreiben..."
+
 cat > /etc/systemd/system/cpanel-master.service <<EOF
 [Unit]
 Description=ControlPanelVPS Master API
@@ -229,12 +277,14 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=append:${LOG_DIR}/master.log
 StandardError=append:${LOG_DIR}/master-error.log
+NoNewPrivileges=yes
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
 # ── Systemd: Agent ────────────────────────────────────────────────────────────
+NODE_ID_VAL=$(hostname)
 cat > /etc/systemd/system/cpanel-agent.service <<EOF
 [Unit]
 Description=ControlPanelVPS Agent
@@ -246,7 +296,7 @@ User=root
 WorkingDirectory=${INSTALL_DIR}
 Environment=LISTEN_ADDR=:8087
 Environment=AGENT_TOKEN=${AGENT_TOKEN}
-Environment=NODE_ID=$(hostname)
+Environment=NODE_ID=${NODE_ID_VAL}
 ExecStart=${INSTALL_DIR}/bin/agent
 Restart=on-failure
 RestartSec=5
@@ -257,61 +307,117 @@ StandardError=append:${LOG_DIR}/agent-error.log
 WantedBy=multi-user.target
 EOF
 
-info "Systemd neu laden und Dienste starten..."
+# ── Systemd: Frontend (Next.js) ───────────────────────────────────────────────
+cat > /etc/systemd/system/cpanel-frontend.service <<EOF
+[Unit]
+Description=ControlPanelVPS Frontend (Next.js)
+After=network.target cpanel-master.service
+
+[Service]
+Type=simple
+User=cpanel
+Group=cpanel
+WorkingDirectory=${INSTALL_DIR}/frontend
+Environment=PORT=3000
+Environment=NODE_ENV=production
+Environment=NEXT_PUBLIC_API_URL=https://${PANEL_DOMAIN}
+ExecStart=/usr/bin/npm start
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:${LOG_DIR}/frontend.log
+StandardError=append:${LOG_DIR}/frontend-error.log
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Fix ownership so cpanel user can write logs
+chown -R cpanel:cpanel "$LOG_DIR"
+# Frontend dir muss lesbar sein
+chown -R cpanel:cpanel "$INSTALL_DIR/frontend/.next" 2>/dev/null || true
+
+info "Systemd neu laden..."
 systemctl daemon-reload
-systemctl enable cpanel-master cpanel-agent
-systemctl start cpanel-master cpanel-agent
-success "Dienste gestartet (cpanel-master, cpanel-agent)"
+systemctl enable cpanel-master cpanel-agent cpanel-frontend
+systemctl start cpanel-master cpanel-agent cpanel-frontend
+success "Dienste gestartet"
+
+# Dienststatus kurz zeigen
+sleep 2
+for svc in cpanel-master cpanel-agent cpanel-frontend; do
+  STATUS=$(systemctl is-active "$svc" 2>/dev/null || echo "unknown")
+  if [[ "$STATUS" == "active" ]]; then
+    success "  $svc: ${GREEN}aktiv${NC}"
+  else
+    warn "  $svc: $STATUS (prüfe: journalctl -u $svc -n 20)"
+  fi
+done
 
 # ── Nginx ─────────────────────────────────────────────────────────────────────
 step "Nginx konfigurieren"
-info "Virtual-Host schreiben..."
 cat > /etc/nginx/sites-available/controlpanel <<EOF
 server {
     listen 80;
     server_name ${PANEL_DOMAIN};
 
+    # Frontend (Next.js)
     location / {
         proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_cache_bypass \$http_upgrade;
     }
 
+    # Master API
     location /api/ {
         proxy_pass http://127.0.0.1:8080;
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
     }
 }
 EOF
 
 ln -sf /etc/nginx/sites-available/controlpanel /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl reload nginx
+nginx -t
+systemctl enable nginx
+systemctl reload nginx
 success "Nginx konfiguriert"
 
-# ── SSL ───────────────────────────────────────────────────────────────────────
-step "SSL-Zertifikat (Let's Encrypt)"
+# ── SSL (Let's Encrypt) ───────────────────────────────────────────────────────
+step "SSL-Zertifikat ausstellen (Let's Encrypt)"
 info "Certbot für $PANEL_DOMAIN starten..."
-certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL" && {
+if certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL"; then
   CERT_PATH="/etc/letsencrypt/live/${PANEL_DOMAIN}/fullchain.pem"
   KEY_PATH="/etc/letsencrypt/live/${PANEL_DOMAIN}/privkey.pem"
-  # Wire certificate into Postfix
+
+  # Postfix: TLS-Zertifikat eintragen
   postconf -e "smtpd_tls_cert_file = ${CERT_PATH}"
-  postconf -e "smtpd_tls_key_file = ${KEY_PATH}"
-  postconf -e "smtp_tls_cert_file = ${CERT_PATH}"
-  postconf -e "smtp_tls_key_file = ${KEY_PATH}"
-  # Wire certificate into Dovecot
+  postconf -e "smtpd_tls_key_file  = ${KEY_PATH}"
+  postconf -e "smtp_tls_cert_file  = ${CERT_PATH}"
+  postconf -e "smtp_tls_key_file   = ${KEY_PATH}"
+
+  # Dovecot: ssl=required aktivieren + Zertifikat setzen
   sed -i "s|^ssl = yes|ssl = required|" /etc/dovecot/conf.d/10-ssl.conf
-  cat >> /etc/dovecot/conf.d/10-ssl.conf <<DVCERTEOF
+  grep -q "ssl_cert = " /etc/dovecot/conf.d/10-ssl.conf \
+    || cat >> /etc/dovecot/conf.d/10-ssl.conf <<DVCERTEOF
 ssl_cert = <${CERT_PATH}
 ssl_key = <${KEY_PATH}
 DVCERTEOF
+
   systemctl restart postfix dovecot 2>/dev/null || true
-  success "SSL-Zertifikat ausgestellt und in Postfix/Dovecot eingebunden"
-} || warn "SSL fehlgeschlagen — manuell ausführen: certbot --nginx -d $PANEL_DOMAIN"
+  success "SSL-Zertifikat ausgestellt und eingebunden"
+else
+  warn "SSL fehlgeschlagen (DNS noch nicht propagiert?)"
+  warn "Später ausführen: certbot --nginx -d $PANEL_DOMAIN"
+fi
 
 # ── Unattended Security Updates ──────────────────────────────────────────────
 step "Automatische Sicherheitsupdates konfigurieren"
@@ -334,18 +440,18 @@ APT::Periodic::Unattended-Upgrade "1";
 APT::Periodic::Download-Upgradeable-Packages "1";
 APT::Periodic::AutocleanInterval "7";
 AUEOF
-success "Automatische Sicherheitsupdates aktiviert"
+success "Automatische Sicherheitsupdates aktiviert (täglich)"
 
 # ── Mail TLS & Rspamd ────────────────────────────────────────────────────────
-step "Mailserver-Sicherheit konfigurieren (TLS + Rspamd)"
+step "Mailserver-Sicherheit konfigurieren"
 
-# Create virtual mailboxes directory
+info "Virtuelles Mailbox-Verzeichnis anlegen..."
 mkdir -p /var/mail/vhosts
 groupadd -g 5000 vmail 2>/dev/null || true
-useradd -g vmail -u 5000 vmail -d /var/mail/vhosts 2>/dev/null || true
+useradd -g vmail -u 5000 vmail -d /var/mail/vhosts -s /sbin/nologin 2>/dev/null || true
 chown -R vmail:vmail /var/mail/vhosts
 
-# Rspamd milter configuration
+info "Rspamd konfigurieren..."
 mkdir -p /etc/rspamd/local.d
 cat > /etc/rspamd/local.d/worker-proxy.inc <<'RSEOF'
 milter_servers = "127.0.0.1:11332";
@@ -358,27 +464,27 @@ actions {
 }
 RSAEOF
 systemctl enable rspamd 2>/dev/null || true
-systemctl start rspamd 2>/dev/null || true
+systemctl restart rspamd 2>/dev/null || true
 
-# Postfix: basic TLS config (certs configured after certbot runs)
-postconf -e "smtpd_tls_security_level = may"
-postconf -e "smtpd_tls_mandatory_protocols = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
-postconf -e "smtpd_tls_protocols = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
-postconf -e "smtp_tls_security_level = may"
-postconf -e "smtp_tls_mandatory_protocols = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
-postconf -e "smtp_tls_protocols = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
-postconf -e "smtpd_sasl_auth_enable = yes"
-postconf -e "smtpd_sasl_type = dovecot"
-postconf -e "smtpd_sasl_path = private/auth"
-postconf -e "smtpd_sasl_security_options = noanonymous"
-postconf -e "milter_protocol = 6"
-postconf -e "milter_default_action = accept"
-postconf -e "smtpd_milters = inet:127.0.0.1:11332"
-postconf -e "non_smtpd_milters = inet:127.0.0.1:11332"
+info "Postfix TLS und Submission-Ports konfigurieren..."
+postconf -e "smtpd_tls_security_level       = may"
+postconf -e "smtpd_tls_mandatory_protocols  = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
+postconf -e "smtpd_tls_protocols            = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
+postconf -e "smtp_tls_security_level        = may"
+postconf -e "smtp_tls_mandatory_protocols   = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
+postconf -e "smtp_tls_protocols             = !SSLv2,!SSLv3,!TLSv1,!TLSv1.1"
+postconf -e "smtpd_sasl_auth_enable         = yes"
+postconf -e "smtpd_sasl_type                = dovecot"
+postconf -e "smtpd_sasl_path                = private/auth"
+postconf -e "smtpd_sasl_security_options    = noanonymous"
+postconf -e "milter_protocol                = 6"
+postconf -e "milter_default_action          = accept"
+postconf -e "smtpd_milters                  = inet:127.0.0.1:11332"
+postconf -e "non_smtpd_milters              = inet:127.0.0.1:11332"
 
-# Enable submission (587) and smtps (465) if not already active
+# Submission (587) und SMTPS (465) aktivieren
 if ! grep -q "^submission " /etc/postfix/master.cf; then
-cat >> /etc/postfix/master.cf <<'MCEOF'
+  cat >> /etc/postfix/master.cf <<'MCEOF'
 
 submission inet n       -       y       -       -       smtpd
   -o syslog_name=postfix/submission
@@ -397,7 +503,7 @@ smtps     inet  n       -       y       -       -       smtpd
 MCEOF
 fi
 
-# Dovecot: require TLS (will be activated after certbot cert is available)
+info "Dovecot TLS konfigurieren..."
 cat > /etc/dovecot/conf.d/10-ssl.conf <<'DVEOF'
 ssl = yes
 ssl_min_protocol = TLSv1.2
@@ -405,75 +511,75 @@ ssl_cipher_list = ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDH
 ssl_prefer_server_ciphers = yes
 DVEOF
 
-info "Postfix und Dovecot aktivieren..."
 systemctl enable postfix dovecot 2>/dev/null || true
+systemctl restart postfix dovecot 2>/dev/null || true
 success "Mailserver-Sicherheit konfiguriert"
 
-# ── Firewall (with mail ports) ────────────────────────────────────────────────
+# ── Firewall ──────────────────────────────────────────────────────────────────
 step "Firewall konfigurieren (UFW)"
-info "Regeln setzen..."
 ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow ssh
-ufw allow http
-ufw allow https
-ufw allow 25/tcp   comment "SMTP MTA-to-MTA"
-ufw allow 587/tcp  comment "SMTP Submission (clients)"
-ufw allow 465/tcp  comment "SMTPS (clients)"
-ufw allow 993/tcp  comment "IMAPS"
-ufw allow 143/tcp  comment "IMAP STARTTLS"
+ufw allow ssh        comment "SSH"
+ufw allow 80/tcp     comment "HTTP"
+ufw allow 443/tcp    comment "HTTPS"
+ufw allow 25/tcp     comment "SMTP MTA-to-MTA"
+ufw allow 587/tcp    comment "SMTP Submission"
+ufw allow 465/tcp    comment "SMTPS"
+ufw allow 993/tcp    comment "IMAPS"
+ufw allow 143/tcp    comment "IMAP STARTTLS"
 ufw --force enable
-success "Firewall aktiv — offene Ports: 22, 80, 443, 25, 587, 465, 993, 143"
+success "Firewall aktiv — Ports: 22, 80, 443, 25, 587, 465, 993, 143"
 
-# ── Register local server in panel ───────────────────────────────────────────
+# ── Register local server ─────────────────────────────────────────────────────
 step "Server im Panel registrieren"
-info "Warte 5 Sekunden auf Dienst-Start..."
-sleep 5
-info "Login-Token anfordern..."
-LOGIN_TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" | jq -r .token 2>/dev/null || echo "")
+info "Warte 6 Sekunden auf API-Start..."
+sleep 6
 
-if [[ -n "$LOGIN_TOKEN" && "$LOGIN_TOKEN" != "null" ]]; then
-  info "Server-Eintrag erstellen..."
-  curl -s -X POST http://localhost:8080/api/servers \
+LOGIN_TOKEN=$(curl -sf -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+  | jq -r '.token // empty' 2>/dev/null || echo "")
+
+if [[ -n "$LOGIN_TOKEN" ]]; then
+  SERVER_IP=$(hostname -I | awk '{print $1}')
+  curl -sf -X POST http://localhost:8080/api/servers \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $LOGIN_TOKEN" \
     -d "{
       \"name\": \"$(hostname)\",
       \"hostname\": \"$(hostname)\",
-      \"ip_address\": \"$(hostname -I | awk '{print $1}')\",
+      \"ip_address\": \"${SERVER_IP}\",
       \"agent_url\": \"http://127.0.0.1:8087\",
       \"agent_token\": \"${AGENT_TOKEN}\",
       \"role\": \"general\"
     }" > /dev/null
-  success "Lokaler Server '$(hostname)' im Panel registriert"
+  success "Server '$(hostname)' (${SERVER_IP}) im Panel registriert"
 else
-  warn "Automatische Registrierung fehlgeschlagen — bitte manuell über das Panel hinzufügen"
+  warn "Auto-Registrierung fehlgeschlagen — über Panel → Server → Hinzufügen nachholen"
 fi
 
-# ── Summary ───────────────────────────────────────────────────────────────────
+# ── Fertig ────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${GREEN}╔══════════════════════════════════════════════════╗${NC}"
-echo -e "${GREEN}║        Installation erfolgreich abgeschlossen!   ║${NC}"
-echo -e "${GREEN}╚══════════════════════════════════════════════════╝${NC}"
+echo -e "${GREEN}${BOLD}╔══════════════════════════════════════════════════════╗${NC}"
+echo -e "${GREEN}${BOLD}║   ✓  Installation erfolgreich abgeschlossen!         ║${NC}"
+echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "  ${CYAN}Panel-URL:${NC}     ${BLUE}https://${PANEL_DOMAIN}${NC}"
-echo -e "  ${CYAN}Admin-E-Mail:${NC}  ${BLUE}${ADMIN_EMAIL}${NC}"
-echo -e "  ${CYAN}Agent-Token:${NC}   ${YELLOW}${AGENT_TOKEN}${NC}  ← sicher aufbewahren!"
+echo -e "  ${CYAN}Panel-URL:${NC}      ${BOLD}https://${PANEL_DOMAIN}${NC}"
+echo -e "  ${CYAN}Admin-E-Mail:${NC}   ${ADMIN_EMAIL}"
+echo -e "  ${CYAN}Agent-Token:${NC}    ${YELLOW}${AGENT_TOKEN}${NC}  ← sicher notieren!"
 echo ""
-echo -e "  ${CYAN}Konfiguration:${NC}  $INSTALL_DIR/.env"
-echo -e "  ${CYAN}Logs:${NC}           $LOG_DIR/"
+echo -e "  ${CYAN}Konfiguration:${NC}  ${INSTALL_DIR}/.env"
+echo -e "  ${CYAN}Logs:${NC}           ${LOG_DIR}/"
 echo ""
-echo -e "  ${CYAN}Dienste prüfen:${NC}"
+echo -e "  ${CYAN}Dienststatus:${NC}"
 echo -e "    systemctl status cpanel-master"
 echo -e "    systemctl status cpanel-agent"
+echo -e "    systemctl status cpanel-frontend"
 echo ""
-echo -e "  ${CYAN}Mail-Ports:${NC}  25 (MTA), 587 (Submission), 465 (SMTPS), 993 (IMAPS), 143 (IMAP)"
-echo -e "  ${CYAN}Spam-Filter:${NC} Rspamd Milter auf 127.0.0.1:11332"
-echo -e "  ${CYAN}Sicherheit:${NC}  unattended-upgrades aktiv (täglich, nur Security-Patches)"
+echo -e "  ${CYAN}Mail-Ports:${NC}  25 (MTA), 587 (Submission+STARTTLS), 465 (SMTPS), 993 (IMAPS)"
+echo -e "  ${CYAN}Spam-Filter:${NC} Rspamd  |  ${CYAN}Sicherheit:${NC} unattended-upgrades aktiv"
 echo ""
-echo -e "  ${YELLOW}HINWEIS:${NC} Prüfe bei Dogado, ob ausgehender Port 25 freigeschaltet ist."
-echo -e "  ${YELLOW}HINWEIS:${NC} DKIM-DNS-Eintrag über Panel → E-Mail → DKIM einrichten hinzufügen."
+echo -e "  ${YELLOW}HINWEIS:${NC} Prüfe bei Dogado, ob Port 25 (ausgehend) freigeschaltet ist."
+echo -e "  ${YELLOW}HINWEIS:${NC} DKIM-DNS-Eintrag: Panel → E-Mail → Domain → DKIM einrichten."
 echo ""
