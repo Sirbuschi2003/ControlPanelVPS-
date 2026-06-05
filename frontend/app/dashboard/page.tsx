@@ -1,17 +1,29 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Server, CheckCircle, XCircle, Clock, Activity } from "lucide-react";
-import { api, type Server as ServerType } from "@/lib/api";
+import { Server, CheckCircle, XCircle, Clock, Activity, ShieldAlert, AlertTriangle, HeartPulse } from "lucide-react";
+import { api, type Server as ServerType, type HealthReport, type Alert } from "@/lib/api";
 import Link from "next/link";
 
 export default function DashboardPage() {
   const [servers, setServers] = useState<ServerType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
 
   useEffect(() => {
     api.get<ServerType[]>("/servers")
-      .then(setServers)
+      .then((data) => {
+        setServers(data);
+        // Fetch health for all servers to show dashboard alerts
+        Promise.allSettled(
+          data.map((s) => api.get<HealthReport>(`/monitoring/health?server_id=${s.id}`))
+        ).then((results) => {
+          const allAlerts = results
+            .filter((r): r is PromiseFulfilledResult<HealthReport> => r.status === "fulfilled")
+            .flatMap((r) => r.value.alerts);
+          setAlerts(allAlerts);
+        });
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -28,6 +40,39 @@ export default function DashboardPage() {
           Alle verwalteten Server auf einen Blick
         </p>
       </div>
+
+      {/* Alert banner */}
+      {alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.filter((a) => a.level === "critical").map((a, i) => (
+            <div key={i} className="flex items-start gap-3 bg-red-900/30 border border-red-700 rounded-xl px-4 py-3">
+              <ShieldAlert size={18} className="text-red-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="text-red-200 font-medium text-sm">{a.message}</span>
+                <span className="text-red-400 text-xs ml-2">({a.value})</span>
+              </div>
+              <Link href="/dashboard/monitoring" className="text-red-400 text-xs hover:underline shrink-0">Details →</Link>
+            </div>
+          ))}
+          {alerts.filter((a) => a.level === "warning").map((a, i) => (
+            <div key={i} className="flex items-start gap-3 bg-yellow-900/30 border border-yellow-700 rounded-xl px-4 py-3">
+              <AlertTriangle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <span className="text-yellow-200 font-medium text-sm">{a.message}</span>
+                <span className="text-yellow-400 text-xs ml-2">({a.value})</span>
+              </div>
+              <Link href="/dashboard/monitoring" className="text-yellow-400 text-xs hover:underline shrink-0">Details →</Link>
+            </div>
+          ))}
+        </div>
+      )}
+      {alerts.length === 0 && !loading && (
+        <div className="flex items-center gap-2 bg-green-900/20 border border-green-800 rounded-xl px-4 py-3 text-green-400 text-sm">
+          <HeartPulse size={16} />
+          Alle Systeme gesund — keine Warnungen
+          <Link href="/dashboard/monitoring" className="ml-auto text-green-500 hover:underline text-xs">Monitoring öffnen →</Link>
+        </div>
+      )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

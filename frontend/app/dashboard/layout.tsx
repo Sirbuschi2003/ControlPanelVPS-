@@ -23,6 +23,7 @@ import {
   Folder,
   Users,
   ArrowUpCircle,
+  HeartPulse,
 } from "lucide-react";
 import { api, type User } from "@/lib/api";
 
@@ -43,6 +44,7 @@ const navItems = [
   { href: "/dashboard/terminal", icon: Terminal, label: "Terminal" },
   { href: "/dashboard/users", icon: Users, label: "Benutzer" },
   { href: "/dashboard/updates", icon: ArrowUpCircle, label: "Updates" },
+  { href: "/dashboard/monitoring", icon: HeartPulse, label: "Monitoring" },
   { href: "/dashboard/settings", icon: Settings, label: "Einstellungen" },
 ];
 

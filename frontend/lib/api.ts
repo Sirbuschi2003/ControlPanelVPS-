@@ -247,6 +247,22 @@ export interface SystemService {
   status: string;
 }
 
+export interface Alert {
+  level: "critical" | "warning" | "info";
+  category: string;
+  message: string;
+  value: string;
+  threshold: string;
+  time: string;
+}
+
+export interface HealthReport {
+  healthy: boolean;
+  alerts: Alert[];
+  score: number;
+  server_id: string;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;

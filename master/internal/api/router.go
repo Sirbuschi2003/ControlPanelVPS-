@@ -46,6 +46,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	userSvc := services.NewUserService(db)
 	settingsSvc := services.NewSettingsService(db)
 	systemUpdateSvc := services.NewSystemUpdateService(db)
+	monitoringSvc := services.NewMonitoringService(db)
 
 	// ---- Handlers ----
 	authHandler := handlers.NewAuthHandler(authSvc)
@@ -65,6 +66,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	userHandler := handlers.NewUserHandler(userSvc)
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	systemHandler := handlers.NewSystemHandler(systemUpdateSvc)
+	monitoringHandler := handlers.NewMonitoringHandler(monitoringSvc)
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -185,6 +187,13 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/system/info", systemHandler.Info)
 		r.Get("/api/system/check-updates", systemHandler.CheckUpdates)
 		r.Post("/api/system/update", systemHandler.RunUpdate)
+
+		// Monitoring & Mail Security
+		r.Get("/api/monitoring/health", monitoringHandler.HealthCheck)
+		r.Post("/api/mail/setup-tls", monitoringHandler.SetupMailTLS)
+		r.Post("/api/mail/setup-rspamd", monitoringHandler.SetupRspamd)
+		r.Post("/api/mail/dkim/{domain}", monitoringHandler.SetupDKIM)
+		r.Get("/api/mail/rspamd/status", monitoringHandler.RspamdStatus)
 	})
 
 	return r

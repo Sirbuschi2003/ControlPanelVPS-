@@ -76,6 +76,14 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("DELETE /mail/accounts/{email}", auth(h.deleteMailAccount))
 	h.mux.HandleFunc("POST /mail/aliases", auth(h.addAlias))
 	h.mux.HandleFunc("DELETE /mail/aliases/{source}", auth(h.removeAlias))
+	h.mux.HandleFunc("POST /mail/setup-tls", auth(h.setupMailTLS))
+	h.mux.HandleFunc("POST /mail/setup-rspamd", auth(h.setupRspamd))
+	h.mux.HandleFunc("GET /mail/rspamd/status", auth(h.rspamdStatus))
+	h.mux.HandleFunc("POST /mail/dkim/{domain}", auth(h.setupDKIM))
+	h.mux.HandleFunc("GET /mail/dkim/{domain}", auth(h.getDKIMKey))
+
+	// Monitoring
+	h.mux.HandleFunc("GET /monitoring/health", auth(h.healthCheck))
 
 	// Firewall
 	h.mux.HandleFunc("POST /firewall/rules", auth(h.addFirewallRule))
@@ -732,6 +740,90 @@ func (h *Handler) applyPackageUpdates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+// ─── Mail TLS, DKIM, Rspamd ──────────────────────────────────────────────────
+
+func (h *Handler) setupMailTLS(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Hostname string `json:"hostname"`
+		CertPath string `json:"cert_path"`
+		KeyPath  string `json:"key_path"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Hostname == "" || req.CertPath == "" || req.KeyPath == "" {
+		writeError(w, http.StatusBadRequest, "hostname, cert_path and key_path are required")
+		return
+	}
+	if err := executor.ConfigureMailTLS(req.Hostname, req.CertPath, req.KeyPath); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "configured", "hostname": req.Hostname})
+}
+
+func (h *Handler) setupRspamd(w http.ResponseWriter, r *http.Request) {
+	if err := executor.SetupRspamd(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "configured"})
+}
+
+func (h *Handler) rspamdStatus(w http.ResponseWriter, r *http.Request) {
+	stats, err := executor.GetRspamdStatus()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) setupDKIM(w http.ResponseWriter, r *http.Request) {
+	domain := r.PathValue("domain")
+	pubKey, err := executor.ConfigureDKIM(domain)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":     "configured",
+		"domain":     domain,
+		"public_key": pubKey,
+		"dns_record": "mail._domainkey." + domain + " TXT \"" + pubKey + "\"",
+	})
+}
+
+func (h *Handler) getDKIMKey(w http.ResponseWriter, r *http.Request) {
+	domain := r.PathValue("domain")
+	pubKey, err := executor.GetDKIMPublicKey(domain)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"domain":     domain,
+		"public_key": pubKey,
+		"dns_record": "mail._domainkey." + domain + " TXT \"" + pubKey + "\"",
+	})
+}
+
+// ─── Monitoring ───────────────────────────────────────────────────────────────
+
+func (h *Handler) healthCheck(w http.ResponseWriter, r *http.Request) {
+	report, err := executor.RunHealthCheck()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	status := http.StatusOK
+	if !report.Healthy {
+		status = http.StatusServiceUnavailable
+	}
+	writeJSON(w, status, report)
 }
 
 // ─── System Update ────────────────────────────────────────────────────────────
