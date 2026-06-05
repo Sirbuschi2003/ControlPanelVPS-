@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS managed_databases (
     db_user     TEXT NOT NULL,
     db_password TEXT NOT NULL,
     charset     TEXT NOT NULL DEFAULT 'utf8mb4',
-    collation   TEXT NOT NULL DEFAULT 'utf8mb4_unicode_ci',
+    db_collation TEXT NOT NULL DEFAULT 'utf8mb4_unicode_ci',
     size_bytes  BIGINT NOT NULL DEFAULT 0,
     notes       TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
