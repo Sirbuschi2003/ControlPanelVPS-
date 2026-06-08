@@ -35,7 +35,7 @@ jobs:
 
       - name: Install frontend deps
         working-directory: frontend
-        run: npm ci --no-fund --no-audit
+        run: npm install --no-fund --no-audit
 
       - name: Build frontend
         working-directory: frontend
