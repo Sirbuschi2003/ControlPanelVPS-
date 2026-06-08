@@ -46,9 +46,6 @@ while true; do
   echo -e "${RED}Fehler:${NC} Domain darf nicht leer sein."
 done
 
-# Defaults: email = admin@<domain>, password = random 16-char
-ADMIN_EMAIL="admin@${PANEL_DOMAIN}"
-ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=\n' | head -c 16)"
 
 # Generate secrets
 JWT_SECRET=$(openssl rand -hex 32)
@@ -246,8 +243,6 @@ AGENT_TOKEN=${AGENT_TOKEN}
 LISTEN_ADDR=:8080
 ENVIRONMENT=production
 PANEL_DOMAIN=${PANEL_DOMAIN}
-ADMIN_EMAIL=${ADMIN_EMAIL}
-ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
 chmod 600 "$INSTALL_DIR/.env"
 success ".env geschrieben"
@@ -412,7 +407,7 @@ success "Nginx konfiguriert"
 # ── SSL (Let's Encrypt) ───────────────────────────────────────────────────────
 step "SSL-Zertifikat ausstellen (Let's Encrypt)"
 info "Certbot für $PANEL_DOMAIN starten..."
-if certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos -m "$ADMIN_EMAIL"; then
+if certbot --nginx -d "$PANEL_DOMAIN" --non-interactive --agree-tos -m "admin@${PANEL_DOMAIN}"; then
   CERT_PATH="/etc/letsencrypt/live/${PANEL_DOMAIN}/fullchain.pem"
   KEY_PATH="/etc/letsencrypt/live/${PANEL_DOMAIN}/privkey.pem"
 
@@ -559,7 +554,7 @@ done
 
 LOGIN_TOKEN=$(curl -sf -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d "{\"email\":\"${ADMIN_EMAIL}\",\"password\":\"${ADMIN_PASSWORD}\"}" \
+  -d '{"email":"admin@panel.local","password":"ControlPanel2024!"}' \
   | jq -r '.token // empty' 2>/dev/null || echo "")
 
 if [[ -n "$LOGIN_TOKEN" ]]; then
@@ -587,8 +582,8 @@ echo -e "${GREEN}${BOLD}║   ✓  Installation erfolgreich abgeschlossen!      
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${CYAN}Panel-URL:${NC}      ${BOLD}https://${PANEL_DOMAIN}${NC}"
-echo -e "  ${CYAN}Admin-E-Mail:${NC}   ${BOLD}${ADMIN_EMAIL}${NC}"
-echo -e "  ${CYAN}Admin-Passwort:${NC} ${BOLD}${ADMIN_PASSWORD}${NC}  ← jetzt notieren!"
+echo -e "  ${CYAN}Admin-E-Mail:${NC}   ${BOLD}admin@panel.local${NC}"
+echo -e "  ${CYAN}Admin-Passwort:${NC} ${BOLD}ControlPanel2024!${NC}  ← nach Login ändern!"
 echo -e "  ${CYAN}Agent-Token:${NC}    ${YELLOW}${AGENT_TOKEN}${NC}  ← sicher notieren!"
 echo ""
 echo -e "  ${CYAN}Konfiguration:${NC}  ${INSTALL_DIR}/.env"

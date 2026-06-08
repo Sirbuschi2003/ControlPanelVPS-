@@ -72,9 +72,13 @@ func Migrate(pool *pgxpool.Pool) error {
 }
 
 // SeedAdmin creates the initial admin user if no users exist yet.
+// Falls back to default credentials when env vars are not set.
 func SeedAdmin(pool *pgxpool.Pool, email, password string) error {
-	if email == "" || password == "" {
-		return nil
+	if email == "" {
+		email = "admin@panel.local"
+	}
+	if password == "" {
+		password = "ControlPanel2024!"
 	}
 	ctx := context.Background()
 
