@@ -61,8 +61,8 @@ function ErrorBanner({ msg, onClose }: { msg: string; onClose: () => void }) {
   );
 }
 
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`bg-secondary animate-pulse rounded ${className}`} />;
+function Skeleton({ className, style }: { className?: string; style?: React.CSSProperties }) {
+  return <div className={`bg-secondary animate-pulse rounded ${className}`} style={style} />;
 }
 
 // ── Tab: Panel Software ────────────────────────────────────────────────────────
