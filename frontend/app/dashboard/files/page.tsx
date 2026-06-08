@@ -72,7 +72,7 @@ export default function FilesPage() {
     setLoading(true);
     setError("");
     try {
-      const result = await api.get<FileEntry[]>(`/servers/${serverId}/files?path=${encodeURIComponent(dirPath)}`);
+      const result = await api.get<FileEntry[]>(`/files?server_id=${serverId}&path=${encodeURIComponent(dirPath)}`);
       setEntries(result || []);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler beim Laden");
@@ -117,7 +117,8 @@ export default function FilesPage() {
   async function handleNewFolder() {
     if (!newFolderName) return;
     try {
-      await api.post(`/servers/${selectedServer}/files/mkdir`, {
+      await api.post(`/files/mkdir`, {
+        server_id: selectedServer,
         path: `${path}/${newFolderName}`,
       });
       setShowNewFolder(false);
@@ -134,7 +135,7 @@ export default function FilesPage() {
     setEditContent("");
     try {
       const result = await api.get<{ content: string }>(
-        `/servers/${selectedServer}/files/read?path=${encodeURIComponent(`${path}/${entry.name}`)}`
+        `/files/content?server_id=${selectedServer}&path=${encodeURIComponent(`${path}/${entry.name}`)}`
       );
       setEditContent(result.content || "");
     } catch (e: unknown) {
@@ -148,7 +149,8 @@ export default function FilesPage() {
     if (!showEdit) return;
     setSavingEdit(true);
     try {
-      await api.put(`/servers/${selectedServer}/files/write`, {
+      await api.post(`/files/content`, {
+        server_id: selectedServer,
         path: `${path}/${showEdit.name}`,
         content: editContent,
       });
@@ -165,7 +167,8 @@ export default function FilesPage() {
     reader.onload = async (e) => {
       const content = e.target?.result as string;
       try {
-        await api.post(`/servers/${selectedServer}/files/upload`, {
+        await api.post(`/files/content`, {
+          server_id: selectedServer,
           path: `${path}/${file.name}`,
           content,
         });
@@ -179,7 +182,7 @@ export default function FilesPage() {
 
   async function handleDelete(entry: FileEntry) {
     try {
-      await api.delete(`/servers/${selectedServer}/files?path=${encodeURIComponent(`${path}/${entry.name}`)}`);
+      await api.delete(`/files?server_id=${selectedServer}&path=${encodeURIComponent(`${path}/${entry.name}`)}`);
       setDeleteTarget(null);
       loadDir(selectedServer, path);
     } catch (e: unknown) {
@@ -190,7 +193,7 @@ export default function FilesPage() {
   async function handleDownload(entry: FileEntry) {
     try {
       const result = await api.get<{ content: string }>(
-        `/servers/${selectedServer}/files/read?path=${encodeURIComponent(`${path}/${entry.name}`)}`
+        `/files/content?server_id=${selectedServer}&path=${encodeURIComponent(`${path}/${entry.name}`)}`
       );
       const blob = new Blob([result.content], { type: "text/plain" });
       const url = URL.createObjectURL(blob);

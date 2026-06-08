@@ -55,7 +55,7 @@ export default function FirewallPage() {
   async function load() {
     try {
       const [r, sv] = await Promise.all([
-        api.get<FirewallRule[]>("/firewall/rules"),
+        api.get<FirewallRule[]>("/firewall"),
         api.get<Server[]>("/servers"),
       ]);
       setRules(r);
@@ -73,7 +73,7 @@ export default function FirewallPage() {
   async function handleAdd() {
     setSaving(true);
     try {
-      await api.post("/firewall/rules", form);
+      await api.post("/firewall", form);
       setShowAdd(false);
       setForm({ server_id: "", action: "allow", direction: "in", protocol: "tcp", source: "", dest_port: "", comment: "" });
       await load();
@@ -86,7 +86,7 @@ export default function FirewallPage() {
 
   async function handleToggle(id: string, enabled: boolean) {
     try {
-      await api.put(`/firewall/rules/${id}`, { enabled: !enabled });
+      await api.post(`/firewall/${id}/toggle`, {});
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -95,7 +95,7 @@ export default function FirewallPage() {
 
   async function handleDelete(id: string) {
     try {
-      await api.delete(`/firewall/rules/${id}`);
+      await api.delete(`/firewall/${id}`);
       setDeleteId(null);
       await load();
     } catch (e: unknown) {

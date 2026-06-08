@@ -49,6 +49,16 @@ func (s *SettingsService) Set(ctx context.Context, key, value string) error {
 	return nil
 }
 
+// SetBulk upserts all provided key/value pairs in one transaction.
+func (s *SettingsService) SetBulk(ctx context.Context, settings map[string]string) error {
+	for key, value := range settings {
+		if err := s.Set(ctx, key, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Get retrieves a single setting by key.
 func (s *SettingsService) Get(ctx context.Context, key string) (string, error) {
 	var value string

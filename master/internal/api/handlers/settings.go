@@ -3,9 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/services"
 )
+
+var startTime = time.Now()
 
 // SettingsHandler handles HTTP requests for panel settings management.
 type SettingsHandler struct {
@@ -28,31 +31,32 @@ func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, settings)
 }
 
-type setSettingRequest struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
-// Set handles PUT /api/settings
-// Creates or updates a single setting.
+// Set handles PUT /api/settings — accepts a map of key/value pairs for bulk update.
 func (h *SettingsHandler) Set(w http.ResponseWriter, r *http.Request) {
-	var req setSettingRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var bulk map[string]string
+	if err := json.NewDecoder(r.Body).Decode(&bulk); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	if req.Key == "" {
-		writeError(w, http.StatusBadRequest, "key is required")
+	if err := h.svc.SetBulk(r.Context(), bulk); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save settings: "+err.Error())
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "settings saved"})
+}
 
-	if err := h.svc.Set(r.Context(), req.Key, req.Value); err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save setting: "+err.Error())
-		return
-	}
+// Info handles GET /api/settings/info — returns runtime panel info.
+func (h *SettingsHandler) Info(w http.ResponseWriter, r *http.Request) {
+	uptime := time.Since(startTime).Round(time.Second).String()
 	writeJSON(w, http.StatusOK, map[string]string{
-		"key":   req.Key,
-		"value": req.Value,
+		"version":         "1.0.0",
+		"uptime":          uptime,
+		"database_status": "ok",
+		"go_version":      "go1.22",
 	})
+}
+
+// TestSMTP handles POST /api/settings/test-smtp — stub, SMTP sending not yet implemented.
+func (h *SettingsHandler) TestSMTP(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusNotImplemented, "SMTP test not yet implemented")
 }

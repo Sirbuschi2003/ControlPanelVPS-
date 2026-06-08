@@ -80,6 +80,29 @@ func (h *BackupHandler) CreateConfig(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, config)
 }
 
+type toggleBackupConfigRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+// ToggleConfig handles PUT /api/backups/configs/{id}
+func (h *BackupHandler) ToggleConfig(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	var req toggleBackupConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := h.svc.ToggleConfig(r.Context(), id, req.Enabled); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to toggle backup config: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "backup config updated"})
+}
+
 // DeleteConfig handles DELETE /api/backups/configs/{id}
 func (h *BackupHandler) DeleteConfig(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

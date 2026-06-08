@@ -132,6 +132,14 @@ func (s *BackupService) UpdateConfig(ctx context.Context, id, name, storageType,
 }
 
 // DeleteConfig removes a backup configuration.
+func (s *BackupService) ToggleConfig(ctx context.Context, id string, enabled bool) error {
+	_, err := s.db.Exec(ctx, `UPDATE backup_configs SET enabled = $1, updated_at = NOW() WHERE id = $2`, enabled, id)
+	if err != nil {
+		return fmt.Errorf("toggle backup config: %w", err)
+	}
+	return nil
+}
+
 func (s *BackupService) DeleteConfig(ctx context.Context, id string) error {
 	_, err := s.db.Exec(ctx, `DELETE FROM backup_configs WHERE id = $1`, id)
 	if err != nil {

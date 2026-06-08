@@ -35,7 +35,7 @@ export default function ServicesPage() {
     if (!id) return;
     setLoading(true);
     try {
-      const svcs = await api.get<SystemService[]>(`/servers/${id}/services`);
+      const svcs = await api.get<SystemService[]>(`/services?server_id=${id}`);
       setServices(svcs);
       setLastRefresh(new Date());
     } catch (e: unknown) {
@@ -62,7 +62,7 @@ export default function ServicesPage() {
   async function handleAction(name: string, action: "start" | "stop" | "restart" | "enable" | "disable") {
     setActionLoading(`${name}-${action}`);
     try {
-      await api.post(`/servers/${selectedServer}/services/${name}/${action}`, {});
+      await api.post(`/services/${name}/action`, { server_id: selectedServer, action });
       await loadServices();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : `Fehler bei Aktion ${action}`);

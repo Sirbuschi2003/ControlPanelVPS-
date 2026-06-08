@@ -108,7 +108,7 @@ export default function UsersPage() {
     if (!showPassword || !newPassword) return;
     setSaving(true);
     try {
-      await api.put(`/users/${showPassword.id}/password`, { password: newPassword });
+      await api.post(`/users/${showPassword.id}/password`, { new_password: newPassword });
       setShowPassword(null);
       setNewPassword("");
     } catch (e: unknown) {

@@ -141,6 +141,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/backups/configs", backupHandler.ListConfigs)
 		r.Post("/api/backups/configs", backupHandler.CreateConfig)
 		r.Delete("/api/backups/configs/{id}", backupHandler.DeleteConfig)
+		r.Put("/api/backups/configs/{id}", backupHandler.ToggleConfig)
 		r.Post("/api/backups/configs/{id}/run", backupHandler.RunBackup)
 		r.Get("/api/backups/jobs", backupHandler.ListJobs)
 
@@ -182,6 +183,8 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		// Settings
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Set)
+		r.Get("/api/settings/info", settingsHandler.Info)
+		r.Post("/api/settings/test-smtp", settingsHandler.TestSMTP)
 
 		// System Update
 		r.Get("/api/system/info", systemHandler.Info)
