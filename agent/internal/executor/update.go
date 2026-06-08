@@ -75,22 +75,19 @@ func RunUpdate() (*UpdateResult, error) {
 	}
 
 	// Rebuild Master API
+	goPath := findGo()
 	log("Baue Master API...")
-	out, err = runCmdOutput("go", "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/master"), "./cmd/server")
+	os.Remove(filepath.Join(dir, "master/go.sum"))
+	out, err = runCmdInDirEnv(filepath.Join(dir, "master"), []string{"GOFLAGS=-mod=mod"}, goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/master"), "./cmd/server")
 	if err != nil {
-		// Try with absolute go path
-		goPath := findGo()
-		out, err = runCmdInDir(filepath.Join(dir, "master"), goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/master"), "./cmd/server")
-		if err != nil {
-			return nil, fmt.Errorf("build master: %w\n%s", err, out)
-		}
+		return nil, fmt.Errorf("build master: %w\n%s", err, out)
 	}
 	log("Master API erfolgreich gebaut.")
 
 	// Rebuild Agent
 	log("Baue Agent...")
-	goPath := findGo()
-	out, err = runCmdInDir(filepath.Join(dir, "agent"), goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/agent"), "./cmd/agent")
+	os.Remove(filepath.Join(dir, "agent/go.sum"))
+	out, err = runCmdInDirEnv(filepath.Join(dir, "agent"), []string{"GOFLAGS=-mod=mod"}, goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/agent"), "./cmd/agent")
 	if err != nil {
 		return nil, fmt.Errorf("build agent: %w\n%s", err, out)
 	}
@@ -98,9 +95,9 @@ func RunUpdate() (*UpdateResult, error) {
 
 	// Build frontend
 	log("Baue Frontend...")
-	out, err = runCmdInDir(filepath.Join(dir, "frontend"), "npm", "ci", "--silent")
+	out, err = runCmdInDir(filepath.Join(dir, "frontend"), "npm", "install", "--silent")
 	if err != nil {
-		log("WARN: npm ci: " + out)
+		log("WARN: npm install: " + out)
 	}
 	out, err = runCmdInDir(filepath.Join(dir, "frontend"), "npm", "run", "build")
 	if err != nil {
@@ -110,7 +107,7 @@ func RunUpdate() (*UpdateResult, error) {
 
 	// Restart services
 	log("Starte Dienste neu...")
-	for _, svc := range []string{"cpanel-master", "cpanel-agent"} {
+	for _, svc := range []string{"cpanel-master", "cpanel-agent", "cpanel-frontend"} {
 		if out, err := runCmdOutput("systemctl", "restart", svc); err != nil {
 			log("WARN: restart " + svc + ": " + out)
 		} else {
@@ -163,6 +160,14 @@ func runCmdOutput(name string, args ...string) (string, error) {
 func runCmdInDir(dir, name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func runCmdInDirEnv(dir string, env []string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
