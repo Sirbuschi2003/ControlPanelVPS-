@@ -20,7 +20,8 @@ export default function DashboardPage() {
         ).then((results) => {
           const allAlerts = results
             .filter((r): r is PromiseFulfilledResult<HealthReport> => r.status === "fulfilled")
-            .flatMap((r) => r.value.alerts);
+            .flatMap((r) => r.value.alerts ?? [])
+            .filter(Boolean);
           setAlerts(allAlerts);
         });
       })
