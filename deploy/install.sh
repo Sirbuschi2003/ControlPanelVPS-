@@ -279,7 +279,7 @@ success "Agent kompiliert: $INSTALL_DIR/bin/agent"
 step "Frontend bauen (Next.js) — dauert 2-5 Minuten"
 cd "$INSTALL_DIR/frontend"
 info "npm-Pakete installieren..."
-npm install
+NODE_OPTIONS="--max-old-space-size=512" npm install --no-fund --no-audit
 info "Next.js Production-Build..."
 NEXT_PUBLIC_API_URL="https://${PANEL_DOMAIN}" NODE_OPTIONS="--max-old-space-size=1024" npm run build
 success "Frontend gebaut"
