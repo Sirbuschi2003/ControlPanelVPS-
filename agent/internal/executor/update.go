@@ -2,12 +2,16 @@ package executor
 
 import (
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 )
+
+const releaseBase = "https://github.com/Sirbuschi2003/ControlPanelVPS-/releases/download/latest"
 
 type UpdateResult struct {
 	PreviousCommit string    `json:"previous_commit"`
@@ -29,9 +33,6 @@ func GetVersion() (commit, date, branch string) {
 // CheckUpdates returns true if upstream has new commits.
 func CheckUpdates() (available bool, latestCommit string, err error) {
 	dir := installDir()
-	if out := runCmd("git", "-C", dir, "fetch", "--dry-run", "origin"); out == "" {
-		// no-op
-	}
 	if err2 := runCmdErr("git", "-C", dir, "fetch", "origin"); err2 != nil {
 		return false, "", fmt.Errorf("git fetch: %w", err2)
 	}
@@ -42,7 +43,7 @@ func CheckUpdates() (available bool, latestCommit string, err error) {
 	return
 }
 
-// RunUpdate pulls latest code, rebuilds all components and restarts services.
+// RunUpdate downloads pre-built release artifacts and restarts services.
 func RunUpdate() (*UpdateResult, error) {
 	start := time.Now()
 	dir := installDir()
@@ -52,58 +53,51 @@ func RunUpdate() (*UpdateResult, error) {
 		sb.WriteString("[" + time.Now().Format("15:04:05") + "] " + msg + "\n")
 	}
 
-	// Current commit before update
 	prevCommit := strings.TrimSpace(runCmd("git", "-C", dir, "rev-parse", "--short", "HEAD"))
 	log("Aktueller Commit: " + prevCommit)
 
-	// Git pull
-	log("Lade aktuelle Version von GitHub...")
+	// Git pull (just for version tracking)
+	log("Lade Repository-Status von GitHub...")
 	out, err := runCmdOutput("git", "-C", dir, "pull", "--rebase", "origin")
 	if err != nil {
-		return nil, fmt.Errorf("git pull: %w\n%s", err, out)
+		log("WARN git pull: " + out)
+	} else {
+		log(out)
 	}
-	log(out)
 
 	newCommit := strings.TrimSpace(runCmd("git", "-C", dir, "rev-parse", "--short", "HEAD"))
 	log("Neuer Commit: " + newCommit)
 
-	// Count changed files
 	changedOut := runCmd("git", "-C", dir, "diff", "--name-only", prevCommit, newCommit)
 	changedFiles := len(strings.Split(strings.TrimSpace(changedOut), "\n"))
 	if strings.TrimSpace(changedOut) == "" {
 		changedFiles = 0
 	}
 
-	// Rebuild Master API
-	goPath := findGo()
-	log("Baue Master API...")
-	os.Remove(filepath.Join(dir, "master/go.sum"))
-	out, err = runCmdInDirEnv(filepath.Join(dir, "master"), []string{"GOFLAGS=-mod=mod"}, goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/master"), "./cmd/server")
-	if err != nil {
-		return nil, fmt.Errorf("build master: %w\n%s", err, out)
+	// Download master binary
+	log("Lade Master-API Binary herunter...")
+	if err := downloadFile(releaseBase+"/master", filepath.Join(dir, "bin/master"), 0755); err != nil {
+		return nil, fmt.Errorf("download master: %w", err)
 	}
-	log("Master API erfolgreich gebaut.")
+	log("Master-API heruntergeladen.")
 
-	// Rebuild Agent
-	log("Baue Agent...")
-	os.Remove(filepath.Join(dir, "agent/go.sum"))
-	out, err = runCmdInDirEnv(filepath.Join(dir, "agent"), []string{"GOFLAGS=-mod=mod"}, goPath, "build", "-ldflags=-w -s", "-o", filepath.Join(dir, "bin/agent"), "./cmd/agent")
-	if err != nil {
-		return nil, fmt.Errorf("build agent: %w\n%s", err, out)
+	// Download agent binary
+	log("Lade Agent Binary herunter...")
+	if err := downloadFile(releaseBase+"/agent", filepath.Join(dir, "bin/agent"), 0755); err != nil {
+		return nil, fmt.Errorf("download agent: %w", err)
 	}
-	log("Agent erfolgreich gebaut.")
+	log("Agent heruntergeladen.")
 
-	// Build frontend
-	log("Baue Frontend...")
-	out, err = runCmdInDir(filepath.Join(dir, "frontend"), "npm", "install", "--silent")
-	if err != nil {
-		log("WARN: npm install: " + out)
+	// Download and extract frontend
+	log("Lade Frontend herunter...")
+	standaloneDir := filepath.Join(dir, "frontend-standalone")
+	if err := os.MkdirAll(standaloneDir, 0755); err != nil {
+		return nil, fmt.Errorf("mkdir frontend-standalone: %w", err)
 	}
-	out, err = runCmdInDir(filepath.Join(dir, "frontend"), "npm", "run", "build")
-	if err != nil {
-		return nil, fmt.Errorf("build frontend: %w\n%s", err, out)
+	if err := downloadAndExtractTarGz(releaseBase+"/frontend.tar.gz", standaloneDir); err != nil {
+		return nil, fmt.Errorf("download frontend: %w", err)
 	}
-	log("Frontend erfolgreich gebaut.")
+	log("Frontend heruntergeladen und entpackt.")
 
 	// Restart services
 	log("Starte Dienste neu...")
@@ -115,15 +109,50 @@ func RunUpdate() (*UpdateResult, error) {
 		}
 	}
 
-	result := &UpdateResult{
+	return &UpdateResult{
 		PreviousCommit: prevCommit,
 		NewCommit:      newCommit,
 		ChangedFiles:   changedFiles,
 		Output:         sb.String(),
 		Duration:       time.Since(start).Round(time.Second).String(),
 		RestartedAt:    time.Now(),
+	}, nil
+}
+
+func downloadFile(url, dest string, mode os.FileMode) error {
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return err
 	}
-	return result, nil
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
+	}
+	f, err := os.OpenFile(dest, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
+}
+
+func downloadAndExtractTarGz(url, destDir string) error {
+	resp, err := http.Get(url) //nolint:gosec
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d for %s", resp.StatusCode, url)
+	}
+	cmd := exec.Command("tar", "-xz", "-C", destDir)
+	cmd.Stdin = resp.Body
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("tar: %w\n%s", err, out)
+	}
+	return nil
 }
 
 func installDir() string {
@@ -131,15 +160,6 @@ func installDir() string {
 		return d
 	}
 	return "/opt/controlpanel"
-}
-
-func findGo() string {
-	for _, p := range []string{"/usr/local/go/bin/go", "/usr/bin/go"} {
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	return "go"
 }
 
 func runCmd(name string, args ...string) string {
@@ -153,21 +173,6 @@ func runCmdErr(name string, args ...string) error {
 
 func runCmdOutput(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
-}
-
-func runCmdInDir(dir, name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	return string(out), err
-}
-
-func runCmdInDirEnv(dir string, env []string, name string, args ...string) (string, error) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), env...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

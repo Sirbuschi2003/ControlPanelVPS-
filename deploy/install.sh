@@ -149,27 +149,6 @@ pkg_install "Rspamd (Spam-Filter)" --no-install-recommends rspamd
 
 success "Alle Systempakete installiert"
 
-# ── Go ───────────────────────────────────────────────────────────────────────
-step "Go ${GO_VERSION} installieren"
-export PATH=$PATH:/usr/local/go/bin
-
-if command -v go &>/dev/null && go version | grep -q "go${GO_VERSION}"; then
-  success "Go bereits installiert: $(go version)"
-else
-  info "Go ${GO_VERSION} herunterladen..."
-  ARCH=$(dpkg --print-architecture)
-  [[ "$ARCH" == "amd64" ]] && GOARCH="amd64" || GOARCH="arm64"
-  curl -fL --progress-bar \
-    "https://go.dev/dl/go${GO_VERSION}.linux-${GOARCH}.tar.gz" \
-    -o /tmp/go.tar.gz
-  info "Go entpacken nach /usr/local/go ..."
-  rm -rf /usr/local/go
-  tar -C /usr/local -xzf /tmp/go.tar.gz
-  rm /tmp/go.tar.gz
-  echo 'export PATH=$PATH:/usr/local/go/bin' > /etc/profile.d/go.sh
-  success "Go installiert: $(go version)"
-fi
-
 # ── Node.js ──────────────────────────────────────────────────────────────────
 step "Node.js ${NODE_VERSION} installieren"
 if command -v node &>/dev/null && node --version | grep -q "^v${NODE_VERSION}"; then
@@ -247,28 +226,24 @@ EOF
 chmod 600 "$INSTALL_DIR/.env"
 success ".env geschrieben"
 
-# ── Build Master ──────────────────────────────────────────────────────────────
-step "Master-API kompilieren (Go)"
-cd "$INSTALL_DIR/master"
-info "Abhängigkeiten herunterladen und kompilieren — dauert 1-3 Minuten..."
-CGO_ENABLED=0 GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
-success "Master-API kompiliert: $INSTALL_DIR/bin/master"
+# ── Download pre-built binaries from GitHub Releases ─────────────────────────
+RELEASE_BASE="https://github.com/Sirbuschi2003/ControlPanelVPS-/releases/download/latest"
+step "Binaries herunterladen (GitHub Release)"
+info "Master-API herunterladen..."
+curl -fL --progress-bar "${RELEASE_BASE}/master" -o "$INSTALL_DIR/bin/master"
+chmod +x "$INSTALL_DIR/bin/master"
+success "Master-API: $INSTALL_DIR/bin/master"
 
-# ── Build Agent ───────────────────────────────────────────────────────────────
-step "Agent kompilieren (Go)"
-cd "$INSTALL_DIR/agent"
-info "Kompilieren..."
-CGO_ENABLED=0 GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
-success "Agent kompiliert: $INSTALL_DIR/bin/agent"
+info "Agent herunterladen..."
+curl -fL --progress-bar "${RELEASE_BASE}/agent" -o "$INSTALL_DIR/bin/agent"
+chmod +x "$INSTALL_DIR/bin/agent"
+success "Agent: $INSTALL_DIR/bin/agent"
 
-# ── Build Frontend ────────────────────────────────────────────────────────────
-step "Frontend bauen (Next.js) — dauert 2-5 Minuten"
-cd "$INSTALL_DIR/frontend"
-info "npm-Pakete installieren..."
-NODE_OPTIONS="--max-old-space-size=512" npm install --no-fund --no-audit
-info "Next.js Production-Build..."
-NEXT_PUBLIC_API_URL="https://${PANEL_DOMAIN}" NODE_OPTIONS="--max-old-space-size=1024" npm run build
-success "Frontend gebaut"
+info "Frontend herunterladen und entpacken..."
+mkdir -p "$INSTALL_DIR/frontend-standalone"
+curl -fL --progress-bar "${RELEASE_BASE}/frontend.tar.gz" \
+  | tar -xz -C "$INSTALL_DIR/frontend-standalone"
+success "Frontend: $INSTALL_DIR/frontend-standalone"
 
 # ── Systemd: Master ───────────────────────────────────────────────────────────
 step "Systemd-Dienste einrichten"
@@ -320,7 +295,7 @@ StandardError=append:${LOG_DIR}/agent-error.log
 WantedBy=multi-user.target
 EOF
 
-# ── Systemd: Frontend (Next.js) ───────────────────────────────────────────────
+# ── Systemd: Frontend (Next.js standalone) ───────────────────────────────────
 cat > /etc/systemd/system/cpanel-frontend.service <<EOF
 [Unit]
 Description=ControlPanelVPS Frontend (Next.js)
@@ -330,11 +305,11 @@ After=network.target cpanel-master.service
 Type=simple
 User=cpanel
 Group=cpanel
-WorkingDirectory=${INSTALL_DIR}/frontend
+WorkingDirectory=${INSTALL_DIR}/frontend-standalone
 Environment=PORT=3000
+Environment=HOSTNAME=127.0.0.1
 Environment=NODE_ENV=production
-Environment=NEXT_PUBLIC_API_URL=https://${PANEL_DOMAIN}
-ExecStart=/usr/bin/npm start
+ExecStart=/usr/bin/node ${INSTALL_DIR}/frontend-standalone/server.js
 Restart=on-failure
 RestartSec=5
 StandardOutput=append:${LOG_DIR}/frontend.log
@@ -346,8 +321,7 @@ EOF
 
 # Fix ownership so cpanel user can write logs
 chown -R cpanel:cpanel "$LOG_DIR"
-# Frontend dir muss lesbar sein
-chown -R cpanel:cpanel "$INSTALL_DIR/frontend/.next" 2>/dev/null || true
+chown -R cpanel:cpanel "$INSTALL_DIR/frontend-standalone" 2>/dev/null || true
 
 info "Systemd neu laden..."
 systemctl daemon-reload
