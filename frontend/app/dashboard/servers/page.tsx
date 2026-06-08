@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { Plus, RefreshCw, Server, Cpu, MemoryStick, HardDrive, Clock } from "lucide-react";
+import { Plus, RefreshCw, Server, Cpu, MemoryStick, HardDrive, Clock, Pencil, Trash2 } from "lucide-react";
 import { api, type Server as ServerType, type ServerMetrics, formatBytes, formatUptime } from "@/lib/api";
 
 export default function ServersPage() {
@@ -10,6 +10,8 @@ export default function ServersPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [editServer, setEditServer] = useState<ServerType | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const loadServers = useCallback(async () => {
     const data = await api.get<ServerType[]>("/servers");
@@ -30,21 +32,30 @@ export default function ServersPage() {
     setMetrics(map);
   }, []);
 
-  useEffect(() => {
-    loadServers()
-      .then(loadMetrics)
-      .catch(console.error)
-      .finally(() => setLoading(false));
+  const loadAll = useCallback(async () => {
+    const data = await loadServers();
+    await loadMetrics(data);
+    // Re-fetch to get updated status set by GetMetrics (online/offline)
+    await loadServers();
   }, [loadServers, loadMetrics]);
+
+  useEffect(() => {
+    loadAll().catch(console.error).finally(() => setLoading(false));
+  }, [loadAll]);
 
   async function refresh() {
     setRefreshing(true);
     try {
-      const data = await loadServers();
-      await loadMetrics(data);
+      await loadAll();
     } finally {
       setRefreshing(false);
     }
+  }
+
+  async function handleDelete(id: string) {
+    await api.delete(`/servers/${id}`);
+    setDeleteId(null);
+    await loadServers();
   }
 
   return (
@@ -86,17 +97,47 @@ export default function ServersPage() {
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {servers.map((server) => (
-            <ServerCard key={server.id} server={server} metrics={metrics[server.id]} />
+            <ServerCard
+              key={server.id}
+              server={server}
+              metrics={metrics[server.id]}
+              onEdit={() => setEditServer(server)}
+              onDelete={() => setDeleteId(server.id)}
+            />
           ))}
         </div>
       )}
 
-      {showAdd && <AddServerModal onClose={() => setShowAdd(false)} onAdded={refresh} />}
+      {showAdd && <ServerModal onClose={() => setShowAdd(false)} onSaved={refresh} />}
+      {editServer && (
+        <ServerModal
+          server={editServer}
+          onClose={() => setEditServer(null)}
+          onSaved={() => { setEditServer(null); refresh(); }}
+        />
+      )}
+      {deleteId && (
+        <ConfirmDeleteModal
+          serverName={servers.find((s) => s.id === deleteId)?.name ?? ""}
+          onConfirm={() => handleDelete(deleteId)}
+          onClose={() => setDeleteId(null)}
+        />
+      )}
     </div>
   );
 }
 
-function ServerCard({ server, metrics }: { server: ServerType; metrics?: ServerMetrics }) {
+function ServerCard({
+  server,
+  metrics,
+  onEdit,
+  onDelete,
+}: {
+  server: ServerType;
+  metrics?: ServerMetrics;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
   return (
     <div className="bg-card border border-border rounded-xl p-5 space-y-4">
       {/* Header */}
@@ -110,7 +151,23 @@ function ServerCard({ server, metrics }: { server: ServerType; metrics?: ServerM
             <p className="text-xs text-muted-foreground">{server.ip_address}</p>
           </div>
         </div>
-        <StatusBadge status={server.status} />
+        <div className="flex items-center gap-2">
+          <StatusBadge status={server.status} />
+          <button
+            onClick={onEdit}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Bearbeiten"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={onDelete}
+            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            title="Löschen"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       {/* Metrics */}
@@ -231,14 +288,23 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
   );
 }
 
-function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: () => void }) {
+function ServerModal({
+  server,
+  onClose,
+  onSaved,
+}: {
+  server?: ServerType;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isEdit = !!server;
   const [form, setForm] = useState({
-    name: "",
-    hostname: "",
-    ip_address: "",
-    agent_url: "",
+    name: server?.name ?? "",
+    hostname: server?.hostname ?? "",
+    ip_address: server?.ip_address ?? "",
+    agent_url: server?.agent_url ?? "",
     agent_token: "",
-    role: "general",
+    role: server?.role ?? "general",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -248,31 +314,38 @@ function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
     setLoading(true);
     setError("");
     try {
-      await api.post("/servers", form);
-      onAdded();
-      onClose();
+      if (isEdit) {
+        await api.put(`/servers/${server!.id}`, form);
+      } else {
+        await api.post("/servers", form);
+      }
+      onSaved();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Fehler beim Hinzufügen");
+      setError(err instanceof Error ? err.message : "Fehler beim Speichern");
     } finally {
       setLoading(false);
     }
   }
 
+  const fields = [
+    { key: "name", label: "Name", placeholder: "Mein VPS" },
+    { key: "hostname", label: "Hostname", placeholder: "server1.example.com" },
+    { key: "ip_address", label: "IP-Adresse", placeholder: "1.2.3.4" },
+    { key: "agent_url", label: "Agent URL", placeholder: "http://1.2.3.4:8087" },
+    { key: "agent_token", label: isEdit ? "Agent Token (leer lassen = unverändert)" : "Agent Token", placeholder: "Geheimes Token" },
+  ];
+
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-card border border-border rounded-xl w-full max-w-md shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="font-semibold text-foreground">Server hinzufügen</h2>
+          <h2 className="font-semibold text-foreground">
+            {isEdit ? "Server bearbeiten" : "Server hinzufügen"}
+          </h2>
           <button onClick={onClose} className="text-muted-foreground hover:text-foreground">✕</button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
-          {[
-            { key: "name", label: "Name", placeholder: "Mein VPS" },
-            { key: "hostname", label: "Hostname", placeholder: "server1.example.com" },
-            { key: "ip_address", label: "IP-Adresse", placeholder: "1.2.3.4" },
-            { key: "agent_url", label: "Agent URL", placeholder: "http://1.2.3.4:8087" },
-            { key: "agent_token", label: "Agent Token", placeholder: "Geheimes Token" },
-          ].map(({ key, label, placeholder }) => (
+          {fields.map(({ key, label, placeholder }) => (
             <div key={key}>
               <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
               <input
@@ -284,9 +357,7 @@ function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
               />
             </div>
           ))}
-          {error && (
-            <p className="text-xs text-destructive">{error}</p>
-          )}
+          {error && <p className="text-xs text-destructive">{error}</p>}
           <div className="flex gap-2 pt-2">
             <button
               type="button"
@@ -300,10 +371,58 @@ function AddServerModal({ onClose, onAdded }: { onClose: () => void; onAdded: ()
               disabled={loading}
               className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
             >
-              {loading ? "Hinzufügen..." : "Hinzufügen"}
+              {loading ? "Speichern..." : isEdit ? "Speichern" : "Hinzufügen"}
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDeleteModal({
+  serverName,
+  onConfirm,
+  onClose,
+}: {
+  serverName: string;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleConfirm() {
+    setLoading(true);
+    try {
+      await onConfirm();
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-xl w-full max-w-sm shadow-2xl p-6 space-y-4">
+        <h2 className="font-semibold text-foreground">Server löschen?</h2>
+        <p className="text-sm text-muted-foreground">
+          <span className="font-medium text-foreground">{serverName}</span> wird dauerhaft entfernt.
+          Alle zugehörigen Daten (Websites, Datenbanken, etc.) bleiben in der Datenbank erhalten.
+        </p>
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2 border border-border rounded-lg text-sm text-muted-foreground hover:bg-accent transition-colors"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={handleConfirm}
+            disabled={loading}
+            className="flex-1 px-4 py-2 bg-destructive text-destructive-foreground rounded-lg text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
+          >
+            {loading ? "Löschen..." : "Löschen"}
+          </button>
+        </div>
       </div>
     </div>
   );

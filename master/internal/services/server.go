@@ -66,6 +66,34 @@ func (s *ServerService) Create(ctx context.Context, name, hostname, ip, agentURL
 	return &srv, nil
 }
 
+func (s *ServerService) Update(ctx context.Context, id, name, hostname, ip, agentURL, agentToken, role string) (*models.Server, error) {
+	var srv models.Server
+	err := s.db.QueryRow(ctx, `
+		UPDATE servers
+		SET name = $1, hostname = $2, ip_address = $3, agent_url = $4, agent_token = $5, role = $6
+		WHERE id = $7
+		RETURNING id, name, hostname, ip_address, agent_url, role, status, last_seen, created_at
+	`, name, hostname, ip, agentURL, agentToken, role, id).Scan(
+		&srv.ID, &srv.Name, &srv.Hostname, &srv.IPAddress, &srv.AgentURL,
+		&srv.Role, &srv.Status, &srv.LastSeen, &srv.CreatedAt,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("update server: %w", err)
+	}
+	return &srv, nil
+}
+
+func (s *ServerService) Delete(ctx context.Context, id string) error {
+	tag, err := s.db.Exec(ctx, `DELETE FROM servers WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete server: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("server not found")
+	}
+	return nil
+}
+
 func (s *ServerService) GetMetrics(ctx context.Context, serverID string) (*models.ServerMetrics, error) {
 	var agentURL, agentToken string
 	err := s.db.QueryRow(ctx, `SELECT agent_url, agent_token FROM servers WHERE id = $1`, serverID).

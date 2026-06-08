@@ -58,6 +58,37 @@ func (h *ServerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, srv)
 }
 
+func (h *ServerHandler) Update(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	var req createServerRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" || req.IPAddress == "" || req.AgentURL == "" {
+		writeError(w, http.StatusBadRequest, "name, ip_address and agent_url are required")
+		return
+	}
+	if req.Role == "" {
+		req.Role = "general"
+	}
+	srv, err := h.serverSvc.Update(r.Context(), serverID, req.Name, req.Hostname, req.IPAddress, req.AgentURL, req.AgentToken, req.Role)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update server")
+		return
+	}
+	writeJSON(w, http.StatusOK, srv)
+}
+
+func (h *ServerHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	serverID := chi.URLParam(r, "id")
+	if err := h.serverSvc.Delete(r.Context(), serverID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete server")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (h *ServerHandler) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	serverID := chi.URLParam(r, "id")
 	metrics, err := h.serverSvc.GetMetrics(r.Context(), serverID)

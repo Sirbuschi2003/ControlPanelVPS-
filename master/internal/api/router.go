@@ -91,6 +91,8 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		// Servers
 		r.Get("/api/servers", serverHandler.List)
 		r.Post("/api/servers", serverHandler.Create)
+		r.Put("/api/servers/{id}", serverHandler.Update)
+		r.Delete("/api/servers/{id}", serverHandler.Delete)
 		r.Get("/api/servers/{id}/metrics", serverHandler.GetMetrics)
 
 		// Websites
