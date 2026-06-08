@@ -110,7 +110,7 @@ pkg_install() {
 
 pkg_install "Basis-Tools" \
   --no-install-recommends \
-  curl wget git build-essential ca-certificates gnupg lsb-release \
+  curl wget git ca-certificates gnupg lsb-release \
   htop net-tools unzip jq openssl software-properties-common
 
 pkg_install "PostgreSQL & Redis" \
@@ -251,14 +251,14 @@ success ".env geschrieben"
 step "Master-API kompilieren (Go)"
 cd "$INSTALL_DIR/master"
 info "Abhängigkeiten herunterladen und kompilieren — dauert 1-3 Minuten..."
-GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
+CGO_ENABLED=0 GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/master" ./cmd/server
 success "Master-API kompiliert: $INSTALL_DIR/bin/master"
 
 # ── Build Agent ───────────────────────────────────────────────────────────────
 step "Agent kompilieren (Go)"
 cd "$INSTALL_DIR/agent"
 info "Kompilieren..."
-GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
+CGO_ENABLED=0 GOFLAGS=-mod=mod /usr/local/go/bin/go build -ldflags="-w -s" -o "$INSTALL_DIR/bin/agent" ./cmd/agent
 success "Agent kompiliert: $INSTALL_DIR/bin/agent"
 
 # ── Build Frontend ────────────────────────────────────────────────────────────
