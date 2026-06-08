@@ -46,7 +46,7 @@ jobs:
 
       - name: Package frontend
         run: |
-          cp -r frontend/public frontend/.next/standalone/
+          [ -d frontend/public ] && cp -r frontend/public frontend/.next/standalone/ || true
           cp -r frontend/.next/static frontend/.next/standalone/.next/
           tar -czf dist/frontend.tar.gz -C frontend/.next/standalone .
 
