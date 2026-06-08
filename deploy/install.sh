@@ -256,6 +256,7 @@ LISTEN_ADDR=:8080
 ENVIRONMENT=production
 PANEL_DOMAIN=${PANEL_DOMAIN}
 ADMIN_EMAIL=${ADMIN_EMAIL}
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
 EOF
 chmod 600 "$INSTALL_DIR/.env"
 success ".env geschrieben"
@@ -606,6 +607,6 @@ echo ""
 echo -e "  ${CYAN}Mail-Ports:${NC}  25 (MTA), 587 (Submission+STARTTLS), 465 (SMTPS), 993 (IMAPS)"
 echo -e "  ${CYAN}Spam-Filter:${NC} Rspamd  |  ${CYAN}Sicherheit:${NC} unattended-upgrades aktiv"
 echo ""
-echo -e "  ${YELLOW}HINWEIS:${NC} Prüfe bei Dogado, ob Port 25 (ausgehend) freigeschaltet ist."
+echo -e "  ${YELLOW}HINWEIS:${NC} Prüfe bei deinem Anbieter, ob Port 25 (ausgehend) freigeschaltet ist."
 echo -e "  ${YELLOW}HINWEIS:${NC} DKIM-DNS-Eintrag: Panel → E-Mail → Domain → DKIM einrichten."
 echo ""

@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
 //go:embed migrations/*.sql
@@ -67,5 +68,37 @@ func Migrate(pool *pgxpool.Pool) error {
 
 		slog.Info("applied migration", "name", name)
 	}
+	return nil
+}
+
+// SeedAdmin creates the initial admin user if no users exist yet.
+func SeedAdmin(pool *pgxpool.Pool, email, password string) error {
+	if email == "" || password == "" {
+		return nil
+	}
+	ctx := context.Background()
+
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return fmt.Errorf("count users: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (email, password, name, role)
+		VALUES ($1, $2, 'Administrator', 'admin')
+	`, email, string(hash))
+	if err != nil {
+		return fmt.Errorf("seed admin: %w", err)
+	}
+
+	slog.Info("admin user created", "email", email)
 	return nil
 }

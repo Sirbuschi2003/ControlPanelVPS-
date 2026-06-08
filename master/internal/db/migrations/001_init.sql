@@ -39,11 +39,3 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at DESC);
 
--- Default admin user: admin@panel.local / changeme
-INSERT INTO users (email, password, name, role)
-VALUES (
-    'admin@panel.local',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewCnbP6mkECxMzGu',
-    'Administrator',
-    'admin'
-) ON CONFLICT DO NOTHING;

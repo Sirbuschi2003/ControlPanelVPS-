@@ -37,6 +37,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := db.SeedAdmin(database, cfg.AdminEmail, cfg.AdminPassword); err != nil {
+		slog.Error("seed admin failed", "error", err)
+		os.Exit(1)
+	}
+
 	router := api.NewRouter(cfg, database)
 
 	srv := &http.Server{
