@@ -281,7 +281,7 @@ cd "$INSTALL_DIR/frontend"
 info "npm-Pakete installieren..."
 npm install
 info "Next.js Production-Build..."
-NEXT_PUBLIC_API_URL="https://${PANEL_DOMAIN}" npm run build
+NEXT_PUBLIC_API_URL="https://${PANEL_DOMAIN}" NODE_OPTIONS="--max-old-space-size=1024" npm run build
 success "Frontend gebaut"
 
 # ── Systemd: Master ───────────────────────────────────────────────────────────
