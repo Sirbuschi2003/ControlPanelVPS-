@@ -27,7 +27,13 @@ jobs:
 
       - name: Build master binary
         working-directory: master
-        run: CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod -ldflags="-w -s" -o ../dist/master ./cmd/server
+        run: |
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=mod \
+            -ldflags="-w -s \
+              -X 'github.com/Sirbuschi2003/ControlPanelVPS/master/internal/version.Commit=${{ github.sha }}' \
+              -X 'github.com/Sirbuschi2003/ControlPanelVPS/master/internal/version.Date=${BUILD_DATE}'" \
+            -o ../dist/master ./cmd/server
 
       - name: Build agent binary
         working-directory: agent
@@ -59,4 +65,7 @@ jobs:
           allowUpdates: true
           removeArtifacts: true
           prerelease: true
-          body: "Automatisch gebaut von GitHub Actions."
+          body: |
+            Automatisch gebaut von GitHub Actions.
+            commit: ${{ github.sha }}
+            built: ${{ github.event.head_commit.timestamp }}

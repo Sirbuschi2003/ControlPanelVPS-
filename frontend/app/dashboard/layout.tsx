@@ -29,7 +29,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { api, type User } from "@/lib/api";
+import { api, type User, type PanelUpdateStatus } from "@/lib/api";
 
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Übersicht" },
@@ -57,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [updateAvailable, setUpdateAvailable] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -68,6 +69,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       .then(setUser)
       .catch(() => router.push("/login"));
   }, [router]);
+
+  // Poll cached update status every 5 minutes — no GitHub API calls, instant
+  useEffect(() => {
+    function fetchStatus() {
+      api.get<PanelUpdateStatus>("/panel/update-status")
+        .then((s) => setUpdateAvailable(s.available))
+        .catch(() => {});
+    }
+    fetchStatus();
+    const iv = setInterval(fetchStatus, 5 * 60 * 1000);
+    return () => clearInterval(iv);
+  }, []);
 
   function logout() {
     localStorage.removeItem("token");
@@ -102,6 +115,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
           {navItems.map(({ href, icon: Icon, label }) => {
             const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+            const showBadge = href === "/dashboard/updates" && updateAvailable;
             return (
               <Link
                 key={href}
@@ -113,8 +127,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 }`}
                 title={collapsed ? label : undefined}
               >
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                {!collapsed && <span>{label}</span>}
+                <span className="relative flex-shrink-0">
+                  <Icon className="w-4 h-4" />
+                  {showBadge && (
+                    <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-yellow-400" />
+                  )}
+                </span>
+                {!collapsed && (
+                  <span className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className="truncate">{label}</span>
+                    {showBadge && (
+                      <span className="ml-auto text-xs font-semibold px-1.5 py-0.5 rounded-full bg-yellow-400/20 text-yellow-500 leading-none">
+                        NEU
+                      </span>
+                    )}
+                  </span>
+                )}
               </Link>
             );
           })}

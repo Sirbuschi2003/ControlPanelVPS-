@@ -12,6 +12,8 @@ import (
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/api"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/config"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/db"
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/services"
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/updater"
 	"github.com/joho/godotenv"
 )
 
@@ -41,6 +43,11 @@ func main() {
 		slog.Error("seed admin failed", "error", err)
 		os.Exit(1)
 	}
+
+	// Start background update checker (checks every 24h, auto-updates if setting enabled)
+	panelSvc := services.NewPanelUpdateService(cfg.InstallDir, cfg.GitHubRepo)
+	settingsSvc := services.NewSettingsService(database)
+	updater.Start(panelSvc, settingsSvc)
 
 	router := api.NewRouter(cfg, database)
 

@@ -263,6 +263,35 @@ export interface HealthReport {
   server_id: string;
 }
 
+export interface PanelInfo {
+  commit: string;
+  date: string;
+  install_dir: string;
+}
+
+export interface PanelUpdateStatus {
+  available: boolean;
+  current_commit: string;
+  latest_commit: string;
+  published_at: string;
+  checked_at: string;
+  error?: string;
+}
+
+export interface PanelUpdateCheck {
+  available: boolean;
+  current_commit: string;
+  latest_commit: string;
+  published_at: string;
+}
+
+export interface PanelUpdateResult {
+  previous_commit: string;
+  new_commit: string;
+  duration: string;
+  restarted_at: string;
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;

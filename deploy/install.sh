@@ -222,6 +222,8 @@ AGENT_TOKEN=${AGENT_TOKEN}
 LISTEN_ADDR=:8080
 ENVIRONMENT=production
 PANEL_DOMAIN=${PANEL_DOMAIN}
+INSTALL_DIR=${INSTALL_DIR}
+GITHUB_REPO=Sirbuschi2003/ControlPanelVPS-
 EOF
 chmod 600 "$INSTALL_DIR/.env"
 success ".env geschrieben"
@@ -229,6 +231,7 @@ success ".env geschrieben"
 # ── Download pre-built binaries from GitHub Releases ─────────────────────────
 RELEASE_BASE="https://github.com/Sirbuschi2003/ControlPanelVPS-/releases/download/latest"
 step "Binaries herunterladen (GitHub Release)"
+mkdir -p "$INSTALL_DIR/bin"
 info "Master-API herunterladen..."
 curl -fL --progress-bar "${RELEASE_BASE}/master" -o "$INSTALL_DIR/bin/master"
 chmod +x "$INSTALL_DIR/bin/master"

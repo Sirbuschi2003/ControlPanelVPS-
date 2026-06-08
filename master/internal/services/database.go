@@ -55,12 +55,17 @@ func deobfuscatePassword(encoded string) (string, error) {
 	return string(data), nil
 }
 
-// List returns all managed databases for a server.
+// List returns all managed databases, optionally filtered by serverID.
 func (s *DatabaseService) List(ctx context.Context, serverID string) ([]models.ManagedDatabase, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, name, db_type, db_user, charset, db_collation, size_bytes, notes, created_at
-		FROM managed_databases WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+	query := `SELECT id, server_id, name, db_type, db_user, charset, db_collation, size_bytes, notes, created_at
+		FROM managed_databases ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, name, db_type, db_user, charset, db_collation, size_bytes, notes, created_at
+			FROM managed_databases WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query databases: %w", err)
 	}

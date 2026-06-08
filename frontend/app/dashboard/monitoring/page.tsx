@@ -81,8 +81,8 @@ export default function MonitoringPage() {
   }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const allHealthy = reports.every((r) => r.healthy);
-  const criticalCount = reports.flatMap((r) => r.alerts).filter((a) => a.level === "critical").length;
-  const warningCount = reports.flatMap((r) => r.alerts).filter((a) => a.level === "warning").length;
+  const criticalCount = reports.flatMap((r) => r.alerts ?? []).filter((a) => a.level === "critical").length;
+  const warningCount = reports.flatMap((r) => r.alerts ?? []).filter((a) => a.level === "warning").length;
 
   return (
     <div className="space-y-6">
@@ -172,14 +172,14 @@ export default function MonitoringPage() {
               <ScoreRing score={report.score} />
             </div>
 
-            {report.alerts.length === 0 ? (
+            {(report.alerts ?? []).length === 0 ? (
               <div className="text-green-400 text-sm flex items-center gap-2">
                 <CheckCircle2 size={16} />
                 Keine Probleme gefunden
               </div>
             ) : (
               <div className="space-y-2">
-                {report.alerts.map((alert, i) => (
+                {(report.alerts ?? []).map((alert, i) => (
                   <div
                     key={i}
                     className={`flex items-start justify-between rounded-lg p-3 ${

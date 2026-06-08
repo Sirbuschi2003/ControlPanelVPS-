@@ -47,6 +47,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	settingsSvc := services.NewSettingsService(db)
 	systemUpdateSvc := services.NewSystemUpdateService(db)
 	monitoringSvc := services.NewMonitoringService(db)
+	panelUpdateSvc := services.NewPanelUpdateService(cfg.InstallDir, cfg.GitHubRepo)
 
 	// ---- Handlers ----
 	authHandler := handlers.NewAuthHandler(authSvc)
@@ -67,6 +68,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	settingsHandler := handlers.NewSettingsHandler(settingsSvc)
 	systemHandler := handlers.NewSystemHandler(systemUpdateSvc)
 	monitoringHandler := handlers.NewMonitoringHandler(monitoringSvc)
+	panelUpdateHandler := handlers.NewPanelUpdateHandler(panelUpdateSvc, settingsSvc)
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -190,6 +192,14 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/system/info", systemHandler.Info)
 		r.Get("/api/system/check-updates", systemHandler.CheckUpdates)
 		r.Post("/api/system/update", systemHandler.RunUpdate)
+
+		// Panel self-update
+		r.Get("/api/panel/info", panelUpdateHandler.Info)
+		r.Get("/api/panel/update-status", panelUpdateHandler.UpdateStatus)
+		r.Get("/api/panel/check-update", panelUpdateHandler.CheckUpdate)
+		r.Post("/api/panel/update", panelUpdateHandler.RunUpdate)
+		r.Get("/api/panel/auto-update", panelUpdateHandler.GetAutoUpdate)
+		r.Put("/api/panel/auto-update", panelUpdateHandler.SetAutoUpdate)
 
 		// Monitoring & Mail Security
 		r.Get("/api/monitoring/health", monitoringHandler.HealthCheck)

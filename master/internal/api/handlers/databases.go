@@ -18,13 +18,9 @@ func NewDatabaseHandler(svc *services.DatabaseService) *DatabaseHandler {
 	return &DatabaseHandler{svc: svc}
 }
 
-// List handles GET /api/databases?server_id=...
+// List handles GET /api/databases or GET /api/databases?server_id=...
 func (h *DatabaseHandler) List(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
 
 	dbs, err := h.svc.List(r.Context(), serverID)
 	if err != nil {

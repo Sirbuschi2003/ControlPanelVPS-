@@ -11,6 +11,8 @@ type Config struct {
 	Environment   string
 	AdminEmail    string
 	AdminPassword string
+	InstallDir    string
+	GitHubRepo    string
 }
 
 func Load() *Config {
@@ -23,6 +25,8 @@ func Load() *Config {
 		Environment:   getEnv("ENVIRONMENT", "development"),
 		AdminEmail:    getEnv("ADMIN_EMAIL", "admin@panel.local"),
 		AdminPassword: getEnv("ADMIN_PASSWORD", ""),
+		InstallDir:    getEnv("INSTALL_DIR", "/opt/controlpanel"),
+		GitHubRepo:    getEnv("GITHUB_REPO", "Sirbuschi2003/ControlPanelVPS-"),
 	}
 }
 
