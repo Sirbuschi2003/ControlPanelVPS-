@@ -46,18 +46,9 @@ while true; do
   echo -e "${RED}Fehler:${NC} Domain darf nicht leer sein."
 done
 
-while true; do
-  read -rp "Admin-E-Mail: " ADMIN_EMAIL </dev/tty
-  [[ "$ADMIN_EMAIL" == *@*.* ]] && break
-  echo -e "${RED}Fehler:${NC} Keine gültige E-Mail-Adresse."
-done
-
-while true; do
-  read -rsp "Admin-Passwort (min. 12 Zeichen): " ADMIN_PASSWORD </dev/tty
-  echo
-  [[ ${#ADMIN_PASSWORD} -ge 12 ]] && break
-  echo -e "${RED}Fehler:${NC} Passwort zu kurz (min. 12 Zeichen)."
-done
+# Defaults: email = admin@<domain>, password = random 16-char
+ADMIN_EMAIL="admin@${PANEL_DOMAIN}"
+ADMIN_PASSWORD="$(openssl rand -base64 18 | tr -d '/+=\n' | head -c 16)"
 
 # Generate secrets
 JWT_SECRET=$(openssl rand -hex 32)
@@ -596,7 +587,8 @@ echo -e "${GREEN}${BOLD}║   ✓  Installation erfolgreich abgeschlossen!      
 echo -e "${GREEN}${BOLD}╚══════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "  ${CYAN}Panel-URL:${NC}      ${BOLD}https://${PANEL_DOMAIN}${NC}"
-echo -e "  ${CYAN}Admin-E-Mail:${NC}   ${ADMIN_EMAIL}"
+echo -e "  ${CYAN}Admin-E-Mail:${NC}   ${BOLD}${ADMIN_EMAIL}${NC}"
+echo -e "  ${CYAN}Admin-Passwort:${NC} ${BOLD}${ADMIN_PASSWORD}${NC}  ← jetzt notieren!"
 echo -e "  ${CYAN}Agent-Token:${NC}    ${YELLOW}${AGENT_TOKEN}${NC}  ← sicher notieren!"
 echo ""
 echo -e "  ${CYAN}Konfiguration:${NC}  ${INSTALL_DIR}/.env"
