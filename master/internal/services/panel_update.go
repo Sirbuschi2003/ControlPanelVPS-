@@ -191,15 +191,22 @@ func (s *PanelUpdateService) findAssetURLs(release *githubRelease) (masterURL, f
 }
 
 func (s *PanelUpdateService) downloadBinary(ctx context.Context, url string) error {
-	tmpPath := filepath.Join(os.TempDir(), "cpanel-master.new")
+	dest := filepath.Join(s.installDir, "bin", "master")
+	// Download to same filesystem as dest to guarantee atomic rename (avoids EXDEV)
+	tmpPath := dest + ".new"
+
 	if err := downloadFile(ctx, url, tmpPath); err != nil {
+		_ = os.Remove(tmpPath)
 		return err
 	}
 	if err := os.Chmod(tmpPath, 0755); err != nil {
+		_ = os.Remove(tmpPath)
 		return err
 	}
-	dest := filepath.Join(s.installDir, "bin", "master")
-	// Atomic rename: replaces inode, safe for running binaries
+	// Remove running binary first: on Linux the process keeps its fd open,
+	// so the old binary stays alive in memory while we place the new one.
+	// This avoids ETXTBSY on rename.
+	_ = os.Remove(dest)
 	return os.Rename(tmpPath, dest)
 }
 
