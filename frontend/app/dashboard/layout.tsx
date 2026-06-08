@@ -24,7 +24,11 @@ import {
   Users,
   ArrowUpCircle,
   HeartPulse,
+  UserCircle,
+  KeyRound,
+  ChevronDown,
 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { api, type User } from "@/lib/api";
 
 const navItems = [
@@ -135,14 +139,56 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="h-14 border-b border-border bg-card flex items-center px-6 gap-4">
           <div className="flex-1" />
           {user && (
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-semibold">
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="text-sm">
-                <div className="text-foreground font-medium">{user.name}</div>
-              </div>
-            </div>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger asChild>
+                <button className="flex items-center gap-2 rounded-lg px-2 py-1 hover:bg-accent transition-colors outline-none">
+                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs font-semibold">
+                    {user.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="text-sm text-left">
+                    <div className="text-foreground font-medium leading-none">{user.name}</div>
+                    <div className="text-muted-foreground text-xs mt-0.5">{user.email}</div>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+                </button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Portal>
+                <DropdownMenu.Content
+                  align="end"
+                  sideOffset={6}
+                  className="z-50 min-w-[180px] rounded-lg border border-border bg-card shadow-lg p-1 text-sm"
+                >
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href="/dashboard/profile"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-foreground hover:bg-accent cursor-pointer outline-none"
+                    >
+                      <UserCircle className="w-4 h-4" />
+                      Mein Profil
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Item asChild>
+                    <Link
+                      href="/dashboard/profile#password"
+                      className="flex items-center gap-2 px-3 py-2 rounded-md text-foreground hover:bg-accent cursor-pointer outline-none"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                      Passwort ändern
+                    </Link>
+                  </DropdownMenu.Item>
+                  <DropdownMenu.Separator className="my-1 h-px bg-border" />
+                  <DropdownMenu.Item asChild>
+                    <button
+                      onClick={logout}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-destructive hover:bg-destructive/10 cursor-pointer outline-none"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      Abmelden
+                    </button>
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Portal>
+            </DropdownMenu.Root>
           )}
         </header>
 

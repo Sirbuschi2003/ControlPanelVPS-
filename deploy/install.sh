@@ -560,8 +560,11 @@ success "Firewall aktiv — Ports: 22, 80, 443, 25, 587, 465, 993, 143"
 
 # ── Register local server ─────────────────────────────────────────────────────
 step "Server im Panel registrieren"
-info "Warte 6 Sekunden auf API-Start..."
-sleep 6
+info "Warte auf API-Start..."
+for i in $(seq 1 15); do
+  curl -sf http://localhost:8080/api/auth/login -o /dev/null 2>/dev/null && break
+  sleep 2
+done
 
 LOGIN_TOKEN=$(curl -sf -X POST http://localhost:8080/api/auth/login \
   -H 'Content-Type: application/json' \
@@ -579,7 +582,7 @@ if [[ -n "$LOGIN_TOKEN" ]]; then
       \"ip_address\": \"${SERVER_IP}\",
       \"agent_url\": \"http://127.0.0.1:8087\",
       \"agent_token\": \"${AGENT_TOKEN}\",
-      \"role\": \"general\"
+      \"role\": \"primary\"
     }" > /dev/null
   success "Server '$(hostname)' (${SERVER_IP}) im Panel registriert"
 else
