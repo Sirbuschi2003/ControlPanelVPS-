@@ -27,7 +27,7 @@ func Load() *Config {
 		AdminEmail:     getEnv("ADMIN_EMAIL", "admin@panel.local"),
 		AdminPassword:  getEnv("ADMIN_PASSWORD", ""),
 		InstallDir:     getEnv("INSTALL_DIR", "/opt/controlpanel"),
-		GitHubRepo:     getEnv("GITHUB_REPO", "Sirbuschi2003/ControlPanelVPS"),
+		GitHubRepo:     getEnv("GITHUB_REPO", "Sirbuschi2003/ControlPanelVPS-"),
 		AllowedOrigins: getEnv("ALLOWED_ORIGINS", ""),
 	}
 }

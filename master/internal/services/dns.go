@@ -117,7 +117,52 @@ type agentDNSZonePayload struct {
 	AdminEmail string `json:"admin_email"`
 }
 
+// defaultDNSRecord describes a single record in the zone template.
+type defaultDNSRecord struct {
+	name     string
+	recType  string
+	content  string
+	ttl      int
+	priority int
+}
+
+// defaultZoneRecords returns the standard record set for a new zone (Plesk-style template).
+func defaultZoneRecords(domain, serverIP, adminEmail string) []defaultDNSRecord {
+	mailHost := "mail." + domain + "."
+	return []defaultDNSRecord{
+		{"@", "A", serverIP, 3600, 0},
+		{"www", "A", serverIP, 3600, 0},
+		{"mail", "A", serverIP, 3600, 0},
+		{"ftp", "A", serverIP, 3600, 0},
+		{"@", "MX", mailHost, 3600, 10},
+		{"@", "TXT", "v=spf1 +a +mx ~all", 3600, 0},
+		{"_dmarc", "TXT", "v=DMARC1; p=none; rua=mailto:" + adminEmail, 3600, 0},
+	}
+}
+
+// addDefaultRecords inserts the standard zone template records (best-effort, ignores individual failures).
+func (s *DNSService) addDefaultRecords(ctx context.Context, zoneID, zoneName, serverIP, adminEmail string, ac *agent.AgentClient) {
+	for _, rec := range defaultZoneRecords(zoneName, serverIP, adminEmail) {
+		payload := agentDNSRecordPayload{
+			Name:     rec.name,
+			Type:     rec.recType,
+			Content:  rec.content,
+			TTL:      rec.ttl,
+			Priority: rec.priority,
+		}
+		// Agent failure is non-fatal for defaults — zone is already created.
+		if _, err := ac.Post(ctx, "/dns/zones/"+zoneName+"/records", payload); err != nil {
+			continue
+		}
+		_, _ = s.db.Exec(ctx, `
+			INSERT INTO dns_records (zone_id, name, type, content, ttl, priority)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, zoneID, rec.name, rec.recType, rec.content, rec.ttl, rec.priority)
+	}
+}
+
 // CreateZone creates a new DNS zone on the agent and stores it in the database.
+// After creation it automatically populates standard records (A, MX, SPF, DMARC).
 func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver, adminEmail string) (*models.DNSZone, error) {
 	ac, err := s.agentFor(ctx, serverID)
 	if err != nil {
@@ -148,7 +193,16 @@ func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver,
 	if err != nil {
 		return nil, fmt.Errorf("insert dns zone: %w", err)
 	}
-	z.Records = []models.DNSRecord{}
+
+	// Populate standard records using the server's public IP.
+	var serverIP string
+	_ = s.db.QueryRow(ctx, `SELECT ip_address FROM servers WHERE id = $1`, serverID).Scan(&serverIP)
+	if serverIP != "" {
+		s.addDefaultRecords(ctx, z.ID, z.Name, serverIP, adminEmail, ac)
+	}
+
+	records, _ := s.recordsByZone(ctx, z.ID)
+	z.Records = records
 	return &z, nil
 }
 

@@ -3,7 +3,7 @@
 # Supports: Ubuntu 22.04, Ubuntu 24.04, Ubuntu 26.04, Debian 12
 set -euo pipefail
 
-REPO="https://github.com/Sirbuschi2003/ControlPanelVPS"
+REPO="https://github.com/Sirbuschi2003/ControlPanelVPS-"
 INSTALL_DIR="/opt/controlpanel"
 DATA_DIR="/var/lib/controlpanel"
 LOG_DIR="/var/log/controlpanel"
@@ -224,13 +224,13 @@ LISTEN_ADDR=:8080
 ENVIRONMENT=production
 PANEL_DOMAIN=${PANEL_DOMAIN}
 INSTALL_DIR=${INSTALL_DIR}
-GITHUB_REPO=Sirbuschi2003/ControlPanelVPS
+GITHUB_REPO=Sirbuschi2003/ControlPanelVPS-
 EOF
 chmod 600 "$INSTALL_DIR/.env"
 success ".env geschrieben"
 
 # ── Download pre-built binaries from GitHub Releases ─────────────────────────
-RELEASE_BASE="https://github.com/Sirbuschi2003/ControlPanelVPS/releases/download/latest"
+RELEASE_BASE="https://github.com/Sirbuschi2003/ControlPanelVPS-/releases/download/latest"
 step "Binaries herunterladen (GitHub Release)"
 mkdir -p "$INSTALL_DIR/bin"
 info "Master-API herunterladen..."
