@@ -154,7 +154,7 @@ export default function DomainDetailPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddAlias, setShowAddAlias] = useState(false);
   const [deleteMailTarget, setDeleteMailTarget] = useState<{ type: "account" | "alias"; id: string } | null>(null);
-  const [accountForm, setAccountForm] = useState({ username: "", password: "", quota_mb: "1000" });
+  const [accountForm, setAccountForm] = useState({ username: "", password: "", quota_mb: "0" });
   const [aliasForm, setAliasForm] = useState({ source: "", destination: "" });
   const [showAccountPw, setShowAccountPw] = useState(false);
   const [savingMail, setSavingMail] = useState(false);
@@ -271,10 +271,10 @@ export default function DomainDetailPage() {
         domain_id: resources.mail_domain.id,
         username: accountForm.username,
         password: accountForm.password,
-        quota_mb: parseInt(accountForm.quota_mb) || 1000,
+        quota_mb: parseInt(accountForm.quota_mb) || 0,
       });
       setShowAddAccount(false);
-      setAccountForm({ username: "", password: "", quota_mb: "1000" });
+      setAccountForm({ username: "", password: "", quota_mb: "0" });
       await loadMail(resources.mail_domain.id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -641,7 +641,7 @@ export default function DomainDetailPage() {
                         {mailAccounts.map(acc => (
                           <tr key={acc.id} className="border-b border-border/50 hover:bg-secondary/30">
                             <td className="px-4 py-2 text-foreground">{acc.username}@{mail_domain.domain}</td>
-                            <td className="px-4 py-2 text-muted-foreground">{acc.quota_mb} MB</td>
+                            <td className="px-4 py-2 text-muted-foreground">{acc.quota_mb > 0 ? `${acc.quota_mb} MB` : "Unbegrenzt"}</td>
                             <td className="px-4 py-2">
                               {deleteMailTarget?.id === acc.id ? (
                                 <div className="flex gap-1">
@@ -960,8 +960,14 @@ export default function DomainDetailPage() {
               </button>
             </div>
           </Field>
-          <Field label="Quota (MB)">
-            <Input type="number" value={accountForm.quota_mb} onChange={e => setAccountForm({ ...accountForm, quota_mb: e.target.value })} />
+          <Field label="Quota (0 = Unbegrenzt)">
+            <div className="flex gap-2">
+              <Input type="number" min="0" value={accountForm.quota_mb} onChange={e => setAccountForm({ ...accountForm, quota_mb: e.target.value })} placeholder="0" />
+              <button type="button" onClick={() => setAccountForm({ ...accountForm, quota_mb: "0" })}
+                className={`px-3 py-2 rounded-lg text-xs border transition-colors ${accountForm.quota_mb === "0" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"}`}>
+                Unbegrenzt
+              </button>
+            </div>
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="ghost" onClick={() => setShowAddAccount(false)}>Abbrechen</Btn>

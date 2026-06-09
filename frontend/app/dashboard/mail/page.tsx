@@ -43,7 +43,7 @@ export default function MailPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string } | null>(null);
 
   const [domainForm, setDomainForm] = useState({ server_id: "", domain: "" });
-  const [accountForm, setAccountForm] = useState({ domain_id: "", username: "", password: "", quota_mb: "1000" });
+  const [accountForm, setAccountForm] = useState({ domain_id: "", username: "", password: "", quota_mb: "0" });
   const [aliasForm, setAliasForm] = useState({ domain_id: "", source: "", destination: "" });
 
   async function load() {
@@ -84,9 +84,9 @@ export default function MailPage() {
   async function handleAddAccount() {
     setSaving(true);
     try {
-      await api.post("/mail/accounts", { ...accountForm, quota_mb: parseInt(accountForm.quota_mb) || 1000 });
+      await api.post("/mail/accounts", { ...accountForm, quota_mb: parseInt(accountForm.quota_mb) || 0 });
       setShowAddAccount(false);
-      setAccountForm({ domain_id: "", username: "", password: "", quota_mb: "1000" });
+      setAccountForm({ domain_id: "", username: "", password: "", quota_mb: "0" });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -271,7 +271,7 @@ export default function MailPage() {
                           <td className="px-4 py-3 font-medium text-foreground">
                             {a.username}@{a.domain_name || domainName(a.domain_id)}
                           </td>
-                          <td className="px-4 py-3 text-muted-foreground">{a.quota_mb} MB</td>
+                          <td className="px-4 py-3 text-muted-foreground">{a.quota_mb > 0 ? `${a.quota_mb} MB` : "Unbegrenzt"}</td>
                           <td className="px-4 py-3 text-muted-foreground">{new Date(a.created_at).toLocaleDateString("de-DE")}</td>
                           <td className="px-4 py-3 text-right">
                             <button onClick={() => setDeleteTarget({ type: "account", id: a.id })} className="text-muted-foreground hover:text-destructive transition-colors">

@@ -86,10 +86,14 @@ func CreateMailAccount(email, hashedPassword string, quotaMB int) error {
 		return fmt.Errorf("adding to virtual mailbox maps: %w", err)
 	}
 
-	// Add to dovecot users: email:{SHA512-CRYPT}hash:::::::
-	// Format: user:password:uid:gid:gecos:home:shell:extra
-	dovecotEntry := fmt.Sprintf("%s:{SHA512-CRYPT}%s::::::userdb_quota_rule=*:storage=%dM",
-		email, hashedPassword, quotaMB)
+	// Build dovecot passwd-file entry; quota_mb=0 means unlimited (no quota rule)
+	var dovecotEntry string
+	if quotaMB <= 0 {
+		dovecotEntry = fmt.Sprintf("%s:{SHA512-CRYPT}%s::::::", email, hashedPassword)
+	} else {
+		dovecotEntry = fmt.Sprintf("%s:{SHA512-CRYPT}%s::::::userdb_quota_rule=*:storage=%dM",
+			email, hashedPassword, quotaMB)
+	}
 	if err := appendLineIfMissing(dovecotUsersFile, dovecotEntry); err != nil {
 		return fmt.Errorf("adding to dovecot users: %w", err)
 	}
@@ -254,9 +258,9 @@ func reloadPostfix() error {
 	return nil
 }
 
-// reloadDovecot reloads the Dovecot IMAP/POP3 server.
+// reloadDovecot restarts Dovecot (restart works whether active or inactive).
 func reloadDovecot() error {
-	cmd := exec.Command("systemctl", "reload", "dovecot")
+	cmd := exec.Command("systemctl", "restart", "dovecot")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("dovecot reload failed: %s: %w", string(out), err)
