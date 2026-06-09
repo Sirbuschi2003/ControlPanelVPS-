@@ -250,7 +250,8 @@ func downloadFile(ctx context.Context, url, dest string) error {
 	}
 	defer f.Close()
 
-	_, err = io.Copy(f, resp.Body)
+	// 500 MB hard limit — prevents disk exhaustion from oversized or malicious responses.
+	_, err = io.Copy(f, io.LimitReader(resp.Body, 500*1024*1024))
 	return err
 }
 
@@ -267,6 +268,8 @@ func extractTarGz(src, destDir string) error {
 	}
 	defer gr.Close()
 
+	safeDestDir := filepath.Clean(destDir) + string(os.PathSeparator)
+
 	tr := tar.NewReader(gr)
 	for {
 		hdr, err := tr.Next()
@@ -277,13 +280,23 @@ func extractTarGz(src, destDir string) error {
 			return err
 		}
 
-		// Sanitize path to prevent directory traversal
-		cleanName := filepath.Clean(hdr.Name)
-		if strings.HasPrefix(cleanName, "..") {
+		// Strip leading separators so filepath.Join cannot escape destDir.
+		// filepath.Clean on an absolute path still returns an absolute path,
+		// which filepath.Join would then use verbatim — the Zip Slip attack.
+		name := strings.TrimLeft(filepath.ToSlash(hdr.Name), "/")
+		cleanName := filepath.FromSlash(filepath.Clean(name))
+
+		// Reject any remaining traversal attempts
+		if strings.HasPrefix(cleanName, "..") || filepath.IsAbs(cleanName) {
 			continue
 		}
 
 		target := filepath.Join(destDir, cleanName)
+
+		// Final containment check — target must be inside destDir
+		if !strings.HasPrefix(filepath.Clean(target)+string(os.PathSeparator), safeDestDir) {
+			continue
+		}
 
 		switch hdr.Typeflag {
 		case tar.TypeDir:
@@ -298,11 +311,12 @@ func extractTarGz(src, destDir string) error {
 			if err != nil {
 				return err
 			}
-			if _, err := io.Copy(out, tr); err != nil {
-				out.Close()
-				return err
-			}
+			// Limit single-file extraction to 100 MB to prevent decompression bombs
+			_, copyErr := io.Copy(out, io.LimitReader(tr, 100*1024*1024))
 			out.Close()
+			if copyErr != nil {
+				return copyErr
+			}
 		}
 	}
 	return nil

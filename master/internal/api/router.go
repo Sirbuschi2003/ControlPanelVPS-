@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/api/handlers"
 	authmw "github.com/Sirbuschi2003/ControlPanelVPS/master/internal/api/middleware"
@@ -21,8 +22,25 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+
+	// Limit request body to 10 MB to prevent DoS via oversized payloads.
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	// CORS: explicit origin list; never use a wildcard with credentials.
+	allowedOrigins := []string{"http://localhost:3000"}
+	if cfg.AllowedOrigins != "" {
+		allowedOrigins = strings.Split(cfg.AllowedOrigins, ",")
+		for i, o := range allowedOrigins {
+			allowedOrigins[i] = strings.TrimSpace(o)
+		}
+	}
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "https://*"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
@@ -174,21 +192,27 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/packages/updates", packageHandler.ListUpdates)
 		r.Post("/api/packages/update", packageHandler.ApplyUpdates)
 
-		// Users
-		r.Get("/api/users", userHandler.List)
-		r.Post("/api/users", userHandler.Create)
-		r.Put("/api/users/{id}", userHandler.Update)
-		r.Delete("/api/users/{id}", userHandler.Delete)
-		r.Post("/api/users/{id}/password", userHandler.ChangePassword)
-		r.Post("/api/users/{id}/totp/setup", userHandler.SetupTOTP)
-		r.Post("/api/users/{id}/totp/verify", userHandler.VerifyTOTP)
-		r.Delete("/api/users/{id}/totp", userHandler.DisableTOTP)
+		// Users — admin-only: privilege escalation risk without RBAC
+		r.Group(func(r chi.Router) {
+			r.Use(authmw.AdminOnly)
+			r.Get("/api/users", userHandler.List)
+			r.Post("/api/users", userHandler.Create)
+			r.Put("/api/users/{id}", userHandler.Update)
+			r.Delete("/api/users/{id}", userHandler.Delete)
+			r.Post("/api/users/{id}/password", userHandler.ChangePassword)
+			r.Post("/api/users/{id}/totp/setup", userHandler.SetupTOTP)
+			r.Post("/api/users/{id}/totp/verify", userHandler.VerifyTOTP)
+			r.Delete("/api/users/{id}/totp", userHandler.DisableTOTP)
+		})
 
-		// Settings
-		r.Get("/api/settings", settingsHandler.Get)
-		r.Put("/api/settings", settingsHandler.Set)
-		r.Get("/api/settings/info", settingsHandler.Info)
-		r.Post("/api/settings/test-smtp", settingsHandler.TestSMTP)
+		// Settings — admin-only: contains SMTP credentials and encryption key
+		r.Group(func(r chi.Router) {
+			r.Use(authmw.AdminOnly)
+			r.Get("/api/settings", settingsHandler.Get)
+			r.Put("/api/settings", settingsHandler.Set)
+			r.Get("/api/settings/info", settingsHandler.Info)
+			r.Post("/api/settings/test-smtp", settingsHandler.TestSMTP)
+		})
 
 		// System Update
 		r.Get("/api/system/info", systemHandler.Info)

@@ -23,15 +23,49 @@ type Server struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+// ServerMetrics matches the nested JSON format returned by the agent collector.
 type ServerMetrics struct {
-	ServerID  string  `json:"server_id"`
-	CPUUsage  float64 `json:"cpu_usage"`
-	MemTotal  uint64  `json:"mem_total"`
-	MemUsed   uint64  `json:"mem_used"`
-	DiskTotal uint64  `json:"disk_total"`
-	DiskUsed  uint64  `json:"disk_used"`
-	Uptime    uint64  `json:"uptime"`
-	LoadAvg   float64 `json:"load_avg"`
+	ServerID      string        `json:"server_id"`
+	Timestamp     time.Time     `json:"timestamp"`
+	CPU           CPUMetrics    `json:"cpu"`
+	Memory        MemoryMetrics `json:"memory"`
+	Disk          DiskMetrics   `json:"disk"`
+	Network       NetMetrics    `json:"network"`
+	Uptime        uint64        `json:"uptime"`
+	LoadAvg       LoadMetrics   `json:"load_avg"`
+	Hostname      string        `json:"hostname"`
+	OS            string        `json:"os"`
+	KernelVersion string        `json:"kernel_version"`
+}
+
+type CPUMetrics struct {
+	UsagePercent float64 `json:"usage_percent"`
+	Cores        int     `json:"cores"`
+}
+
+type MemoryMetrics struct {
+	TotalBytes   uint64  `json:"total_bytes"`
+	UsedBytes    uint64  `json:"used_bytes"`
+	FreeBytes    uint64  `json:"free_bytes"`
+	UsagePercent float64 `json:"usage_percent"`
+}
+
+type DiskMetrics struct {
+	TotalBytes   uint64  `json:"total_bytes"`
+	UsedBytes    uint64  `json:"used_bytes"`
+	FreeBytes    uint64  `json:"free_bytes"`
+	UsagePercent float64 `json:"usage_percent"`
+}
+
+type NetMetrics struct {
+	BytesSent uint64 `json:"bytes_sent"`
+	BytesRecv uint64 `json:"bytes_recv"`
+}
+
+type LoadMetrics struct {
+	Load1  float64 `json:"load1"`
+	Load5  float64 `json:"load5"`
+	Load15 float64 `json:"load15"`
 }
 
 type Website struct {

@@ -2,10 +2,15 @@ package services
 
 import (
 	"context"
-	"encoding/base64"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"io"
 
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/agent"
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/db"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/models"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,29 +35,62 @@ func (s *DatabaseService) agentFor(ctx context.Context, serverID string) (*agent
 	return agent.NewAgentClient(agentURL, agentToken), nil
 }
 
-// xorKey is a simple XOR key used for basic password obfuscation.
-// TODO: use proper AES-GCM encryption with a key from panel_settings.
-const xorKey = "ControlPanelVPS-XOR-Key-2024"
-
-func obfuscatePassword(password string) string {
-	key := []byte(xorKey)
-	data := []byte(password)
-	for i := range data {
-		data[i] ^= key[i%len(key)]
+// encryptionKeyBytes loads the AES-256 key from panel_settings.
+func (s *DatabaseService) encryptionKeyBytes(ctx context.Context) ([]byte, error) {
+	var keyHex string
+	err := s.db.QueryRow(ctx, `SELECT value FROM panel_settings WHERE key = 'backup_encryption_key'`).Scan(&keyHex)
+	if err != nil || keyHex == "" {
+		return nil, fmt.Errorf("encryption key not found in panel_settings")
 	}
-	return base64.StdEncoding.EncodeToString(data)
+	key, err := hex.DecodeString(keyHex)
+	if err != nil || len(key) != 32 {
+		return nil, fmt.Errorf("invalid encryption key format")
+	}
+	return key, nil
 }
 
-func deobfuscatePassword(encoded string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(encoded)
+// encryptPassword encrypts plaintext using AES-256-GCM with a random nonce.
+// Output format: hex(nonce + ciphertext).
+func encryptPassword(key []byte, plaintext string) (string, error) {
+	block, err := aes.NewCipher(key)
 	if err != nil {
-		return "", fmt.Errorf("base64 decode: %w", err)
+		return "", err
 	}
-	key := []byte(xorKey)
-	for i := range data {
-		data[i] ^= key[i%len(key)]
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
 	}
-	return string(data), nil
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+	ciphertext := gcm.Seal(nonce, nonce, []byte(plaintext), nil)
+	return hex.EncodeToString(ciphertext), nil
+}
+
+// decryptPassword decrypts a hex-encoded AES-256-GCM ciphertext.
+func decryptPassword(key []byte, ciphertextHex string) (string, error) {
+	data, err := hex.DecodeString(ciphertextHex)
+	if err != nil {
+		return "", fmt.Errorf("hex decode: %w", err)
+	}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", err
+	}
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+	if len(data) < gcm.NonceSize() {
+		return "", fmt.Errorf("ciphertext too short")
+	}
+	nonce, ciphertext := data[:gcm.NonceSize()], data[gcm.NonceSize():]
+	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
+	if err != nil {
+		return "", fmt.Errorf("decrypt: %w", err)
+	}
+	return string(plaintext), nil
 }
 
 // List returns all managed databases, optionally filtered by serverID.
@@ -114,21 +152,28 @@ func (s *DatabaseService) Create(ctx context.Context, serverID, name, dbType, db
 		return nil, fmt.Errorf("agent create database: %w", err)
 	}
 
-	encryptedPw := obfuscatePassword(dbPassword)
+	key, err := s.encryptionKeyBytes(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("load encryption key: %w", err)
+	}
+	encryptedPw, err := encryptPassword(key, dbPassword)
+	if err != nil {
+		return nil, fmt.Errorf("encrypt password: %w", err)
+	}
 
-	var db models.ManagedDatabase
+	var mdb models.ManagedDatabase
 	err = s.db.QueryRow(ctx, `
 		INSERT INTO managed_databases (server_id, name, db_type, db_user, db_password)
 		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id, server_id, name, db_type, db_user, charset, db_collation, size_bytes, notes, created_at
 	`, serverID, name, dbType, dbUser, encryptedPw).Scan(
-		&db.ID, &db.ServerID, &db.Name, &db.DBType, &db.DBUser,
-		&db.Charset, &db.Collation, &db.SizeBytes, &db.Notes, &db.CreatedAt,
+		&mdb.ID, &mdb.ServerID, &mdb.Name, &mdb.DBType, &mdb.DBUser,
+		&mdb.Charset, &mdb.Collation, &mdb.SizeBytes, &mdb.Notes, &mdb.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert database: %w", err)
 	}
-	return &db, nil
+	return &mdb, nil
 }
 
 // Delete removes a database from the agent and the database.
@@ -156,13 +201,24 @@ func (s *DatabaseService) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// GetPassword returns the decrypted password for a managed database.
-func (s *DatabaseService) GetPassword(ctx context.Context, id string) (string, error) {
+// GetPassword returns the decrypted password for a managed database and audits the access.
+func (s *DatabaseService) GetPassword(ctx context.Context, id, actorID, remoteAddr string) (string, error) {
 	var encryptedPw string
 	err := s.db.QueryRow(ctx, `SELECT db_password FROM managed_databases WHERE id = $1`, id).
 		Scan(&encryptedPw)
 	if err != nil {
 		return "", fmt.Errorf("database not found: %w", err)
 	}
-	return deobfuscatePassword(encryptedPw)
+
+	key, err := s.encryptionKeyBytes(ctx)
+	if err != nil {
+		return "", fmt.Errorf("load encryption key: %w", err)
+	}
+	password, err := decryptPassword(key, encryptedPw)
+	if err != nil {
+		return "", fmt.Errorf("decrypt password: %w", err)
+	}
+
+	db.WriteAuditLog(ctx, s.db, actorID, "db_password_view", "database:"+id, remoteAddr, nil)
+	return password, nil
 }

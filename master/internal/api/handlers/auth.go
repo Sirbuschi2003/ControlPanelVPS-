@@ -36,6 +36,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	token, user, err := h.authSvc.Login(r.Context(), req.Email, req.Password, req.TOTPCode)
 	if err != nil {
+		h.authSvc.WriteLoginAudit(r.Context(), "", req.Email, r.RemoteAddr, false)
 		switch err {
 		case services.ErrInvalidCredentials:
 			writeError(w, http.StatusUnauthorized, "invalid email or password")
@@ -51,6 +52,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.authSvc.WriteLoginAudit(r.Context(), user.ID, user.Email, r.RemoteAddr, true)
 	writeJSON(w, http.StatusOK, loginResponse{Token: token, User: user})
 }
 

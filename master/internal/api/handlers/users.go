@@ -4,9 +4,18 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/api/middleware"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/services"
 	"github.com/go-chi/chi/v5"
 )
+
+// actorIDFromCtx extracts the acting user's ID from the JWT claims in the context.
+func actorIDFromCtx(r *http.Request) string {
+	if claims, ok := r.Context().Value(middleware.ClaimsKey).(*services.Claims); ok {
+		return claims.UserID
+	}
+	return ""
+}
 
 // UserHandler handles HTTP requests for panel user management.
 type UserHandler struct {
@@ -59,7 +68,7 @@ func (h *UserHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Role = "admin"
 	}
 
-	user, err := h.svc.Create(r.Context(), req.Email, req.Password, req.Name, req.Role)
+	user, err := h.svc.Create(r.Context(), req.Email, req.Password, req.Name, req.Role, actorIDFromCtx(r), r.RemoteAddr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create user: "+err.Error())
 		return
@@ -110,7 +119,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), id); err != nil {
+	if err := h.svc.Delete(r.Context(), id, actorIDFromCtx(r), r.RemoteAddr); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete user: "+err.Error())
 		return
 	}
@@ -140,7 +149,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.ChangePassword(r.Context(), id, req.NewPassword); err != nil {
+	if err := h.svc.ChangePassword(r.Context(), id, req.NewPassword, actorIDFromCtx(r), r.RemoteAddr); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to change password: "+err.Error())
 		return
 	}

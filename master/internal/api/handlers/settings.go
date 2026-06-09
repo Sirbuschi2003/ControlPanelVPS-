@@ -20,13 +20,25 @@ func NewSettingsHandler(svc *services.SettingsService) *SettingsHandler {
 	return &SettingsHandler{svc: svc}
 }
 
+// sensitiveKeys holds setting keys whose values must never be returned in plaintext.
+// A non-empty value is replaced with "***" so the UI can detect "is set" vs "empty".
+var sensitiveKeys = map[string]bool{
+	"smtp_pass":              true,
+	"backup_encryption_key": true,
+}
+
 // Get handles GET /api/settings
-// Returns all settings as a key/value map.
+// Returns all settings as a key/value map with sensitive values masked.
 func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.svc.GetAll(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load settings: "+err.Error())
 		return
+	}
+	for key := range sensitiveKeys {
+		if v, exists := settings[key]; exists && v != "" {
+			settings[key] = "***"
+		}
 	}
 	writeJSON(w, http.StatusOK, settings)
 }

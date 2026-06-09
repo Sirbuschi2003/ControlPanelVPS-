@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/db"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -70,6 +71,18 @@ func (s *AuthService) Login(ctx context.Context, email, password, totpCode strin
 	_, _ = s.db.Exec(ctx, `UPDATE users SET updated_at = NOW() WHERE id = $1`, user.ID)
 
 	return token, &user, nil
+}
+
+// WriteLoginAudit records a login attempt to the audit log.
+// Called by the handler so the remote IP is available.
+func (s *AuthService) WriteLoginAudit(ctx context.Context, userID, email, remoteAddr string, success bool) {
+	action := "login_success"
+	if !success {
+		action = "login_failed"
+	}
+	db.WriteAuditLog(ctx, s.db, userID, action, "auth", remoteAddr, map[string]any{
+		"email": email,
+	})
 }
 
 func (s *AuthService) ValidateToken(tokenStr string) (*Claims, error) {

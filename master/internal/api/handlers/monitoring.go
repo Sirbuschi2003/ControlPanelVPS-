@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/services"
+	"github.com/go-chi/chi/v5"
 )
 
 type MonitoringHandler struct {
@@ -85,7 +86,7 @@ func (h *MonitoringHandler) SetupRspamd(w http.ResponseWriter, r *http.Request) 
 
 func (h *MonitoringHandler) SetupDKIM(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	domain := r.PathValue("domain")
+	domain := chi.URLParam(r, "domain")
 	if serverID == "" || domain == "" {
 		writeError(w, http.StatusBadRequest, "server_id and domain are required")
 		return

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/db"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/models"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/pquerna/otp/totp"
@@ -46,10 +47,13 @@ func (s *UserService) List(ctx context.Context) ([]models.User, error) {
 	return users, nil
 }
 
-// Create creates a new user account.
-func (s *UserService) Create(ctx context.Context, email, password, name, role string) (*models.User, error) {
+// Create creates a new user account and audits the operation.
+func (s *UserService) Create(ctx context.Context, email, password, name, role, actorID, remoteAddr string) (*models.User, error) {
 	if email == "" || password == "" || name == "" {
 		return nil, fmt.Errorf("email, password and name are required")
+	}
+	if len(password) < 8 {
+		return nil, fmt.Errorf("password must be at least 8 characters")
 	}
 	if role == "" {
 		role = "admin"
@@ -71,6 +75,7 @@ func (s *UserService) Create(ctx context.Context, email, password, name, role st
 	if err != nil {
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
+	db.WriteAuditLog(ctx, s.db, actorID, "user_create", "user:"+u.ID, remoteAddr, map[string]any{"email": email, "role": role})
 	return &u, nil
 }
 
@@ -85,19 +90,20 @@ func (s *UserService) Update(ctx context.Context, id, name, role string) error {
 	return nil
 }
 
-// Delete removes a user account.
-func (s *UserService) Delete(ctx context.Context, id string) error {
+// Delete removes a user account and audits the operation.
+func (s *UserService) Delete(ctx context.Context, id, actorID, remoteAddr string) error {
 	_, err := s.db.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
+	db.WriteAuditLog(ctx, s.db, actorID, "user_delete", "user:"+id, remoteAddr, nil)
 	return nil
 }
 
-// ChangePassword updates a user's password.
-func (s *UserService) ChangePassword(ctx context.Context, id, newPassword string) error {
-	if newPassword == "" {
-		return fmt.Errorf("password must not be empty")
+// ChangePassword updates a user's password and audits the operation.
+func (s *UserService) ChangePassword(ctx context.Context, id, newPassword, actorID, remoteAddr string) error {
+	if len(newPassword) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
 	}
 
 	hashedPw, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -111,6 +117,7 @@ func (s *UserService) ChangePassword(ctx context.Context, id, newPassword string
 	if err != nil {
 		return fmt.Errorf("change password: %w", err)
 	}
+	db.WriteAuditLog(ctx, s.db, actorID, "user_password_change", "user:"+id, remoteAddr, nil)
 	return nil
 }
 

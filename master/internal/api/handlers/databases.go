@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/api/middleware"
 	"github.com/Sirbuschi2003/ControlPanelVPS/master/internal/services"
 	"github.com/go-chi/chi/v5"
 )
@@ -97,7 +98,12 @@ func (h *DatabaseHandler) GetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	password, err := h.svc.GetPassword(r.Context(), id)
+	actorID := ""
+	if claims, ok := r.Context().Value(middleware.ClaimsKey).(*services.Claims); ok {
+		actorID = claims.UserID
+	}
+
+	password, err := h.svc.GetPassword(r.Context(), id, actorID, r.RemoteAddr)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to retrieve password: "+err.Error())
 		return

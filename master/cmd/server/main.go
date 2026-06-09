@@ -17,6 +17,18 @@ import (
 	"github.com/joho/godotenv"
 )
 
+func warnIfDefaultCredentials(cfg *config.Config) {
+	defaultPw := "ControlPanel2024!"
+	defaultJWT := "dev_secret_change_in_production_32c"
+
+	if cfg.AdminPassword == "" || cfg.AdminPassword == defaultPw {
+		slog.Warn("SECURITY: default admin password is active — change ADMIN_PASSWORD immediately")
+	}
+	if cfg.JWTSecret == defaultJWT {
+		slog.Warn("SECURITY: default JWT secret is active — set JWT_SECRET to a random 32+ char string")
+	}
+}
+
 func main() {
 	_ = godotenv.Load()
 
@@ -43,6 +55,8 @@ func main() {
 		slog.Error("seed admin failed", "error", err)
 		os.Exit(1)
 	}
+
+	warnIfDefaultCredentials(cfg)
 
 	// Start background update checker (checks every 24h, auto-updates if setting enabled)
 	panelSvc := services.NewPanelUpdateService(cfg.InstallDir, cfg.GitHubRepo)
