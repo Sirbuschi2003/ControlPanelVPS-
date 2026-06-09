@@ -152,6 +152,32 @@ func (h *DNSHandler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// UpdateRecord handles PUT /api/dns/records/{id}
+func (h *DNSHandler) UpdateRecord(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Name     string `json:"name"`
+		Type     string `json:"type"`
+		Content  string `json:"content"`
+		TTL      int    `json:"ttl"`
+		Priority int    `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Name == "" || req.Type == "" || req.Content == "" {
+		writeError(w, http.StatusBadRequest, "name, type and content are required")
+		return
+	}
+	record, err := h.svc.UpdateRecord(r.Context(), id, req.Name, req.Type, req.Content, req.TTL, req.Priority)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update DNS record: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, record)
+}
+
 // ApplyTemplate handles POST /api/dns/zones/{id}/apply-template
 // Applies the standard Plesk-style DNS template to an existing zone (idempotent).
 func (h *DNSHandler) ApplyTemplate(w http.ResponseWriter, r *http.Request) {

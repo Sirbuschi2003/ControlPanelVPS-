@@ -354,6 +354,51 @@ func (s *DNSService) AddRecord(ctx context.Context, zoneID, name, recType, conte
 	return &r, nil
 }
 
+// UpdateRecord changes an existing DNS record (delete + re-add).
+func (s *DNSService) UpdateRecord(ctx context.Context, id, name, recType, content string, ttl, priority int) (*models.DNSRecord, error) {
+	var zoneID, oldName, oldType, oldContent string
+	err := s.db.QueryRow(ctx, `SELECT zone_id, name, type, content FROM dns_records WHERE id = $1`, id).
+		Scan(&zoneID, &oldName, &oldType, &oldContent)
+	if err != nil {
+		return nil, fmt.Errorf("dns record not found: %w", err)
+	}
+	var zoneName, serverID string
+	err = s.db.QueryRow(ctx, `SELECT server_id, name FROM dns_zones WHERE id = $1`, zoneID).
+		Scan(&serverID, &zoneName)
+	if err != nil {
+		return nil, fmt.Errorf("dns zone not found: %w", err)
+	}
+	ac, err := s.agentFor(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+	if ttl == 0 {
+		ttl = 3600
+	}
+	_, err = ac.Put(ctx, fmt.Sprintf("/dns/zones/%s/records/%s", zoneName, id), map[string]any{
+		"old_name":    oldName,
+		"old_type":    oldType,
+		"old_content": oldContent,
+		"name":        name,
+		"type":        recType,
+		"content":     content,
+		"ttl":         ttl,
+		"priority":    priority,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agent update dns record: %w", err)
+	}
+	if _, err := s.db.Exec(ctx, `
+		UPDATE dns_records SET name=$1, type=$2, content=$3, ttl=$4, priority=$5, updated_at=NOW() WHERE id=$6`,
+		name, recType, content, ttl, priority, id); err != nil {
+		return nil, fmt.Errorf("update dns record in db: %w", err)
+	}
+	var r models.DNSRecord
+	_ = s.db.QueryRow(ctx, `SELECT id, zone_id, name, type, content, ttl, priority, created_at FROM dns_records WHERE id=$1`, id).
+		Scan(&r.ID, &r.ZoneID, &r.Name, &r.Type, &r.Content, &r.TTL, &r.Priority, &r.CreatedAt)
+	return &r, nil
+}
+
 // DeleteRecord removes a DNS record from the agent and the database.
 func (s *DNSService) DeleteRecord(ctx context.Context, id string) error {
 	var zoneID, name, recType string

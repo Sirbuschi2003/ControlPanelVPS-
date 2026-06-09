@@ -325,6 +325,57 @@ export interface DomainResources {
   ssl_certs: SSLCert[];
   databases: ManagedDatabase[];
   cron_jobs: CronJob[];
+  php_settings?: PHPSettings;
+}
+
+export interface Subdomain {
+  id: string;
+  domain_id: string;
+  server_id: string;
+  name: string;
+  document_root: string;
+  php_version: string;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface DomainAlias {
+  id: string;
+  domain_id: string;
+  alias: string;
+  created_at: string;
+}
+
+export interface Redirect {
+  id: string;
+  domain_id: string;
+  source_path: string;
+  target_url: string;
+  redirect_type: 301 | 302;
+  enabled: boolean;
+  created_at: string;
+}
+
+export interface PHPSettings {
+  id?: string;
+  domain_id: string;
+  memory_limit: number;
+  max_execution_time: number;
+  upload_max_filesize: number;
+  post_max_size: number;
+  max_input_vars: number;
+  display_errors: boolean;
+  created_at?: string;
+}
+
+export interface FTPAccount {
+  id: string;
+  domain_id: string;
+  server_id: string;
+  username: string;
+  home_dir: string;
+  enabled: boolean;
+  created_at: string;
 }
 
 export function formatBytes(bytes: number): string {

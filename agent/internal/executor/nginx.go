@@ -10,15 +10,24 @@ import (
 
 // VhostConfig holds all configuration for an Nginx virtual host.
 type VhostConfig struct {
-	Domain        string   `json:"domain"`
-	Aliases       []string `json:"aliases"`
-	PHPVersion    string   `json:"php_version"`
-	DocumentRoot  string   `json:"document_root"`
-	IndexFile     string   `json:"index_file"`
-	SSLEnabled    bool     `json:"ssl_enabled"`
-	SSLForceHTTPS bool     `json:"ssl_force_https"`
-	SSLCertPath   string   `json:"ssl_cert_path"`
-	SSLKeyPath    string   `json:"ssl_key_path"`
+	Domain           string           `json:"domain"`
+	Aliases          []string         `json:"aliases"`
+	PHPVersion       string           `json:"php_version"`
+	DocumentRoot     string           `json:"document_root"`
+	IndexFile        string           `json:"index_file"`
+	SSLEnabled       bool             `json:"ssl_enabled"`
+	SSLForceHTTPS    bool             `json:"ssl_force_https"`
+	SSLCertPath      string           `json:"ssl_cert_path"`
+	SSLKeyPath       string           `json:"ssl_key_path"`
+	CustomDirectives string           `json:"custom_directives"`
+	Redirects        []RedirectConfig `json:"redirects"`
+}
+
+// RedirectConfig describes a single redirect rule in an Nginx vhost.
+type RedirectConfig struct {
+	SourcePath   string `json:"source_path"`
+	TargetURL    string `json:"target_url"`
+	RedirectType int    `json:"redirect_type"`
 }
 
 const (
@@ -82,7 +91,7 @@ func buildNginxConfig(cfg VhostConfig) string {
 		b.WriteString("    ssl_session_cache   shared:SSL:10m;\n")
 		b.WriteString("    ssl_session_timeout 10m;\n")
 		b.WriteString("\n")
-		writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion)
+		writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion, cfg.Redirects, cfg.CustomDirectives)
 		b.WriteString("}\n")
 
 		if !cfg.SSLForceHTTPS {
@@ -93,7 +102,7 @@ func buildNginxConfig(cfg VhostConfig) string {
 			b.WriteString("    listen [::]:80;\n")
 			fmt.Fprintf(&b, "    server_name %s;\n", serverNames)
 			b.WriteString("\n")
-			writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion)
+			writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion, cfg.Redirects, cfg.CustomDirectives)
 			b.WriteString("}\n")
 		}
 	} else {
@@ -103,14 +112,14 @@ func buildNginxConfig(cfg VhostConfig) string {
 		b.WriteString("    listen [::]:80;\n")
 		fmt.Fprintf(&b, "    server_name %s;\n", serverNames)
 		b.WriteString("\n")
-		writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion)
+		writeNginxLocationBlock(&b, docRoot, indexFile, phpVersion, cfg.Redirects, cfg.CustomDirectives)
 		b.WriteString("}\n")
 	}
 
 	return b.String()
 }
 
-func writeNginxLocationBlock(b *strings.Builder, docRoot, indexFile, phpVersion string) {
+func writeNginxLocationBlock(b *strings.Builder, docRoot, indexFile, phpVersion string, redirects []RedirectConfig, customDirectives string) {
 	phpUpstream := fmt.Sprintf("php%s", strings.ReplaceAll(phpVersion, ".", ""))
 	fmt.Fprintf(b, "    root %s;\n", docRoot)
 	fmt.Fprintf(b, "    index %s;\n", indexFile)
@@ -118,6 +127,24 @@ func writeNginxLocationBlock(b *strings.Builder, docRoot, indexFile, phpVersion 
 	b.WriteString("    access_log /var/log/nginx/$host-access.log;\n")
 	b.WriteString("    error_log  /var/log/nginx/$host-error.log;\n")
 	b.WriteString("\n")
+
+	// Redirect rules
+	for _, r := range redirects {
+		rtype := r.RedirectType
+		if rtype != 301 && rtype != 302 {
+			rtype = 301
+		}
+		src := r.SourcePath
+		if src == "" {
+			src = "/"
+		}
+		if src == "/" {
+			fmt.Fprintf(b, "    return %d %s;\n\n", rtype, r.TargetURL)
+		} else {
+			fmt.Fprintf(b, "    location = %s {\n        return %d %s;\n    }\n\n", src, rtype, r.TargetURL)
+		}
+	}
+
 	b.WriteString("    location / {\n")
 	b.WriteString("        try_files $uri $uri/ /index.php?$query_string;\n")
 	b.WriteString("    }\n")
@@ -132,6 +159,13 @@ func writeNginxLocationBlock(b *strings.Builder, docRoot, indexFile, phpVersion 
 	b.WriteString("    location ~ /\\.ht {\n")
 	b.WriteString("        deny all;\n")
 	b.WriteString("    }\n")
+
+	if customDirectives != "" {
+		b.WriteString("\n    # Custom directives\n")
+		for _, line := range strings.Split(strings.TrimSpace(customDirectives), "\n") {
+			fmt.Fprintf(b, "    %s\n", line)
+		}
+	}
 }
 
 // CreateVhost creates a new Nginx virtual host config, enables it, and reloads Nginx.
@@ -231,6 +265,37 @@ func ListVhosts() ([]string, error) {
 		}
 	}
 	return vhosts, nil
+}
+
+// CreateSubdomainVhost creates a standalone Nginx vhost for a subdomain (NAME.DOMAIN).
+func CreateSubdomainVhost(subdomain, domain, documentRoot, phpVersion string) error {
+	full := subdomain + "." + domain
+	cfg := VhostConfig{
+		Domain:       full,
+		PHPVersion:   phpVersion,
+		DocumentRoot: documentRoot,
+	}
+	if err := os.MkdirAll(documentRoot, 0755); err != nil {
+		return fmt.Errorf("create subdomain dir: %w", err)
+	}
+	confPath := filepath.Join(nginxSitesAvailable, full+".conf")
+	if err := os.WriteFile(confPath, []byte(buildNginxConfig(cfg)), 0644); err != nil {
+		return fmt.Errorf("write subdomain config: %w", err)
+	}
+	enabledPath := filepath.Join(nginxSitesEnabled, full+".conf")
+	_ = os.Remove(enabledPath)
+	if err := os.Symlink(confPath, enabledPath); err != nil {
+		return fmt.Errorf("symlink subdomain config: %w", err)
+	}
+	return ReloadNginx()
+}
+
+// DeleteSubdomainVhost removes the Nginx vhost for a subdomain.
+func DeleteSubdomainVhost(subdomain, domain string) error {
+	full := subdomain + "." + domain
+	_ = os.Remove(filepath.Join(nginxSitesEnabled, full+".conf"))
+	_ = os.Remove(filepath.Join(nginxSitesAvailable, full+".conf"))
+	return ReloadNginx()
 }
 
 // ReloadNginx tests the Nginx configuration and reloads the service.

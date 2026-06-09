@@ -126,6 +126,23 @@ func (h *Handler) registerRoutes() {
 	// Packages
 	h.mux.HandleFunc("GET /packages/updates", auth(h.listPackageUpdates))
 	h.mux.HandleFunc("POST /packages/update", auth(h.applyPackageUpdates))
+
+	// Subdomains
+	h.mux.HandleFunc("POST /subdomains", auth(h.createSubdomain))
+	h.mux.HandleFunc("DELETE /subdomains/{name}", auth(h.deleteSubdomain))
+
+	// PHP settings
+	h.mux.HandleFunc("PUT /php/settings/{domain}", auth(h.updatePHPSettings))
+	h.mux.HandleFunc("DELETE /php/settings/{domain}", auth(h.deletePHPSettings))
+
+	// FTP
+	h.mux.HandleFunc("POST /ftp/accounts", auth(h.createFTPAccount))
+	h.mux.HandleFunc("DELETE /ftp/accounts/{username}", auth(h.deleteFTPAccount))
+	h.mux.HandleFunc("PUT /ftp/accounts/{username}/password", auth(h.updateFTPPassword))
+	h.mux.HandleFunc("POST /ftp/setup", auth(h.setupFTP))
+
+	// DNS record edit
+	h.mux.HandleFunc("PUT /dns/zones/{zone}/records/{id}", auth(h.updateDNSRecord))
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -911,4 +928,159 @@ func (h *Handler) systemRunUpdate(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) terminal(w http.ResponseWriter, r *http.Request) {
 	executor.TerminalWebSocket(w, r)
+}
+
+// ─── Subdomains ───────────────────────────────────────────────────────────────
+
+func (h *Handler) createSubdomain(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name         string `json:"name"`
+		Domain       string `json:"domain"`
+		DocumentRoot string `json:"document_root"`
+		PHPVersion   string `json:"php_version"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := executor.CreateSubdomainVhost(req.Name, req.Domain, req.DocumentRoot, req.PHPVersion); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "subdomain created"})
+}
+
+func (h *Handler) deleteSubdomain(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	domain := r.URL.Query().Get("domain")
+	if err := executor.DeleteSubdomainVhost(name, domain); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "subdomain deleted"})
+}
+
+// ─── PHP Settings ─────────────────────────────────────────────────────────────
+
+func (h *Handler) updatePHPSettings(w http.ResponseWriter, r *http.Request) {
+	domain := r.PathValue("domain")
+	var cfg executor.PHPPoolConfig
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	cfg.Domain = domain
+	if err := executor.WritePHPPool(cfg); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "php settings updated"})
+}
+
+func (h *Handler) deletePHPSettings(w http.ResponseWriter, r *http.Request) {
+	domain := r.PathValue("domain")
+	phpVersion := r.URL.Query().Get("php_version")
+	if err := executor.DeletePHPPool(domain, phpVersion); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "php pool deleted"})
+}
+
+// ─── FTP ─────────────────────────────────────────────────────────────────────
+
+func (h *Handler) setupFTP(w http.ResponseWriter, r *http.Request) {
+	if err := executor.SetupVsftpd(); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "vsftpd configured"})
+}
+
+func (h *Handler) createFTPAccount(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		HomeDir  string `json:"home_dir"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := executor.CreateFTPAccount(req.Username, req.Password, req.HomeDir); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"message": "ftp account created"})
+}
+
+func (h *Handler) deleteFTPAccount(w http.ResponseWriter, r *http.Request) {
+	username := r.PathValue("username")
+	if err := executor.DeleteFTPAccount(username); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ftp account deleted"})
+}
+
+func (h *Handler) updateFTPPassword(w http.ResponseWriter, r *http.Request) {
+	username := r.PathValue("username")
+	var req struct {
+		Password string `json:"password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := executor.UpdateFTPPassword(username, req.Password); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "ftp password updated"})
+}
+
+// ─── DNS Record Update ────────────────────────────────────────────────────────
+
+func (h *Handler) updateDNSRecord(w http.ResponseWriter, r *http.Request) {
+	zoneName := r.PathValue("zone")
+	recordID := r.PathValue("id")
+	var req struct {
+		OldName    string `json:"old_name"`
+		OldType    string `json:"old_type"`
+		OldContent string `json:"old_content"`
+		Name       string `json:"name"`
+		Type       string `json:"type"`
+		Content    string `json:"content"`
+		TTL        int    `json:"ttl"`
+		Priority   int    `json:"priority"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	// Delete old record, add new one
+	delID := req.OldName + ":" + req.OldType
+	if req.OldContent != "" {
+		delID += ":" + req.OldContent
+	}
+	_ = recordID
+	if err := executor.DeleteRecord(zoneName, delID); err != nil {
+		writeError(w, http.StatusInternalServerError, "delete old record: "+err.Error())
+		return
+	}
+	ttl := req.TTL
+	if ttl == 0 {
+		ttl = 3600
+	}
+	if err := executor.AddRecord(zoneName, executor.RecordRequest{
+		Name:     req.Name,
+		Type:     req.Type,
+		Content:  req.Content,
+		TTL:      ttl,
+		Priority: req.Priority,
+	}); err != nil {
+		writeError(w, http.StatusInternalServerError, "add new record: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "dns record updated"})
 }

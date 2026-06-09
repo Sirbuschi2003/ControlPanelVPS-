@@ -69,10 +69,11 @@ func (h *WebsiteHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 type updateWebsiteRequest struct {
-	PHPVersion    string `json:"php_version"`
-	DocumentRoot  string `json:"document_root"`
-	SSLEnabled    *bool  `json:"ssl_enabled"`
-	SSLForceHTTPS *bool  `json:"ssl_force_https"`
+	PHPVersion        string  `json:"php_version"`
+	DocumentRoot      string  `json:"document_root"`
+	SSLEnabled        *bool   `json:"ssl_enabled"`
+	SSLForceHTTPS     *bool   `json:"ssl_force_https"`
+	CustomDirectives  *string `json:"custom_directives"`
 }
 
 // Update handles PUT /api/websites/{id}
@@ -101,6 +102,9 @@ func (h *WebsiteHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SSLForceHTTPS != nil {
 		updates["ssl_force_https"] = *req.SSLForceHTTPS
+	}
+	if req.CustomDirectives != nil {
+		updates["custom_directives"] = *req.CustomDirectives
 	}
 
 	website, err := h.svc.Update(r.Context(), id, updates)

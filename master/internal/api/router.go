@@ -67,6 +67,11 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	systemUpdateSvc := services.NewSystemUpdateService(db)
 	monitoringSvc := services.NewMonitoringService(db)
 	panelUpdateSvc := services.NewPanelUpdateService(cfg.InstallDir, cfg.GitHubRepo)
+	subdomainSvc := services.NewSubdomainService(db)
+	aliasSvc := services.NewDomainAliasService(db)
+	redirectSvc := services.NewRedirectService(db)
+	phpSvc := services.NewPHPService(db)
+	ftpSvc := services.NewFTPService(db)
 
 	// ---- Handlers ----
 	terminalHandler := handlers.NewTerminalHandler(db)
@@ -90,6 +95,11 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	systemHandler := handlers.NewSystemHandler(systemUpdateSvc)
 	monitoringHandler := handlers.NewMonitoringHandler(monitoringSvc)
 	panelUpdateHandler := handlers.NewPanelUpdateHandler(panelUpdateSvc, settingsSvc)
+	subdomainHandler := handlers.NewSubdomainHandler(subdomainSvc)
+	aliasHandler := handlers.NewDomainAliasHandler(aliasSvc)
+	redirectHandler := handlers.NewRedirectHandler(redirectSvc)
+	phpHandler := handlers.NewPHPHandler(phpSvc)
+	ftpHandler := handlers.NewFTPHandler(ftpSvc)
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -157,6 +167,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/dns/zones/{id}/records", dnsHandler.GetRecords)
 		r.Post("/api/dns/zones/{id}/records", dnsHandler.AddRecord)
 		r.Post("/api/dns/zones/{id}/apply-template", dnsHandler.ApplyTemplate)
+		r.Put("/api/dns/records/{id}", dnsHandler.UpdateRecord)
 		r.Delete("/api/dns/records/{id}", dnsHandler.DeleteRecord)
 
 		// Mail
@@ -254,6 +265,31 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Get("/api/mail/rspamd/status", monitoringHandler.RspamdStatus)
 		r.Get("/api/mail/spam/config", monitoringHandler.GetSpamConfig)
 		r.Put("/api/mail/spam/config", monitoringHandler.SetSpamConfig)
+
+		// Subdomains
+		r.Get("/api/subdomains", subdomainHandler.List)
+		r.Post("/api/subdomains", subdomainHandler.Create)
+		r.Delete("/api/subdomains/{id}", subdomainHandler.Delete)
+
+		// Domain aliases
+		r.Get("/api/domain-aliases", aliasHandler.List)
+		r.Post("/api/domain-aliases", aliasHandler.Create)
+		r.Delete("/api/domain-aliases/{id}", aliasHandler.Delete)
+
+		// Redirects
+		r.Get("/api/redirects", redirectHandler.List)
+		r.Post("/api/redirects", redirectHandler.Create)
+		r.Delete("/api/redirects/{id}", redirectHandler.Delete)
+
+		// PHP settings
+		r.Get("/api/php-settings", phpHandler.Get)
+		r.Put("/api/php-settings", phpHandler.Save)
+
+		// FTP
+		r.Get("/api/ftp", ftpHandler.List)
+		r.Post("/api/ftp", ftpHandler.Create)
+		r.Delete("/api/ftp/{id}", ftpHandler.Delete)
+		r.Put("/api/ftp/{id}/password", ftpHandler.UpdatePassword)
 
 		// Terminal — WebSocket proxy to agent PTY
 		r.Get("/api/terminal/ws", terminalHandler.WebSocket)

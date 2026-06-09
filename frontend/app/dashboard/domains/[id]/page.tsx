@@ -13,6 +13,11 @@ import {
   type SSLCert,
   type ManagedDatabase,
   type CronJob,
+  type Subdomain,
+  type DomainAlias,
+  type Redirect,
+  type PHPSettings,
+  type FTPAccount,
 } from "@/lib/api";
 import {
   Layers,
@@ -35,19 +40,28 @@ import {
   Filter,
   ToggleLeft,
   ToggleRight,
+  GitBranch,
+  ArrowRightLeft,
+  Cpu,
+  FolderOpen,
 } from "lucide-react";
 
-type Tab = "overview" | "website" | "dns" | "mail" | "spam" | "databases" | "ssl" | "crons" | "users";
+type Tab = "overview" | "website" | "dns" | "mail" | "spam" | "databases" | "ssl" | "crons" | "subdomains" | "aliases" | "redirects" | "php" | "ftp" | "users";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Übersicht", icon: Layers },
   { id: "website", label: "Website", icon: Globe },
+  { id: "php", label: "PHP", icon: Cpu },
   { id: "dns", label: "DNS", icon: Globe },
   { id: "mail", label: "E-Mail", icon: Mail },
   { id: "spam", label: "Spam-Filter", icon: Filter },
   { id: "databases", label: "Datenbanken", icon: Database },
   { id: "ssl", label: "SSL/TLS", icon: Shield },
   { id: "crons", label: "Cron Jobs", icon: Clock },
+  { id: "subdomains", label: "Subdomains", icon: GitBranch },
+  { id: "aliases", label: "Aliase", icon: ArrowRightLeft },
+  { id: "redirects", label: "Weiterleitungen", icon: ArrowRightLeft },
+  { id: "ftp", label: "FTP", icon: FolderOpen },
   { id: "users", label: "Benutzer", icon: Users },
 ];
 
@@ -193,6 +207,57 @@ export default function DomainDetailPage() {
   const [cronForm, setCronForm] = useState({ name: "", schedule: "0 2 * * *", command: "", run_as_user: "www-data" });
   const [savingCron, setSavingCron] = useState(false);
 
+  // Subdomains
+  const [subdomains, setSubdomains] = useState<Subdomain[]>([]);
+  const [subdomainsLoading, setSubdomainsLoading] = useState(false);
+  const [showAddSubdomain, setShowAddSubdomain] = useState(false);
+  const [deleteSubdomainId, setDeleteSubdomainId] = useState<string | null>(null);
+  const [subdomainForm, setSubdomainForm] = useState({ name: "", document_root: "", php_version: "8.2" });
+  const [savingSubdomain, setSavingSubdomain] = useState(false);
+
+  // Domain Aliases
+  const [domainAliases, setDomainAliases] = useState<DomainAlias[]>([]);
+  const [aliasesLoading, setAliasesLoading] = useState(false);
+  const [showAddDomainAlias, setShowAddDomainAlias] = useState(false);
+  const [deleteDomainAliasId, setDeleteDomainAliasId] = useState<string | null>(null);
+  const [domainAliasForm, setDomainAliasForm] = useState({ alias: "" });
+  const [savingDomainAlias, setSavingDomainAlias] = useState(false);
+
+  // Redirects
+  const [redirects, setRedirects] = useState<Redirect[]>([]);
+  const [redirectsLoading, setRedirectsLoading] = useState(false);
+  const [showAddRedirect, setShowAddRedirect] = useState(false);
+  const [deleteRedirectId, setDeleteRedirectId] = useState<string | null>(null);
+  const [redirectForm, setRedirectForm] = useState({ source_path: "/", target_url: "", redirect_type: "301" });
+  const [savingRedirect, setSavingRedirect] = useState(false);
+
+  // PHP Settings
+  const [phpSettings, setPhpSettings] = useState<PHPSettings | null>(null);
+  const [phpLoading, setPhpLoading] = useState(false);
+  const [savingPhp, setSavingPhp] = useState(false);
+
+  // FTP
+  const [ftpAccounts, setFtpAccounts] = useState<FTPAccount[]>([]);
+  const [ftpLoading, setFtpLoading] = useState(false);
+  const [showAddFTP, setShowAddFTP] = useState(false);
+  const [deleteFTPId, setDeleteFTPId] = useState<string | null>(null);
+  const [ftpForm, setFtpForm] = useState({ username: "", password: "", home_dir: "" });
+  const [showFTPPw, setShowFTPPw] = useState(false);
+  const [savingFTP, setSavingFTP] = useState(false);
+  const [editFTP, setEditFTP] = useState<FTPAccount | null>(null);
+  const [ftpNewPassword, setFtpNewPassword] = useState("");
+  const [showFTPEditPw, setShowFTPEditPw] = useState(false);
+  const [savingFTPPw, setSavingFTPPw] = useState(false);
+
+  // DNS record edit
+  const [editRecord, setEditRecord] = useState<DNSRecord | null>(null);
+  const [editRecordForm, setEditRecordForm] = useState({ name: "", type: "A" as DNSRecord["type"], content: "", ttl: "3600", priority: "" });
+  const [savingEditRecord, setSavingEditRecord] = useState(false);
+
+  // Custom directives (website tab)
+  const [customDirectives, setCustomDirectives] = useState("");
+  const [savingDirectives, setSavingDirectives] = useState(false);
+
   const loadResources = useCallback(async () => {
     try {
       const res = await api.get<DomainResources>(`/domains/${id}/resources`);
@@ -256,6 +321,46 @@ export default function DomainDetailPage() {
     }
   }, []);
 
+  const loadSubdomains = useCallback(async () => {
+    setSubdomainsLoading(true);
+    try {
+      const r = await api.get<Subdomain[]>(`/subdomains?domain_id=${id}`);
+      setSubdomains(r);
+    } catch { /* ignore */ } finally { setSubdomainsLoading(false); }
+  }, [id]);
+
+  const loadDomainAliases = useCallback(async () => {
+    setAliasesLoading(true);
+    try {
+      const r = await api.get<DomainAlias[]>(`/domain-aliases?domain_id=${id}`);
+      setDomainAliases(r);
+    } catch { /* ignore */ } finally { setAliasesLoading(false); }
+  }, [id]);
+
+  const loadRedirects = useCallback(async () => {
+    setRedirectsLoading(true);
+    try {
+      const r = await api.get<Redirect[]>(`/redirects?domain_id=${id}`);
+      setRedirects(r);
+    } catch { /* ignore */ } finally { setRedirectsLoading(false); }
+  }, [id]);
+
+  const loadPHPSettings = useCallback(async () => {
+    setPhpLoading(true);
+    try {
+      const r = await api.get<PHPSettings>(`/php-settings?domain_id=${id}`);
+      setPhpSettings(r);
+    } catch { /* ignore */ } finally { setPhpLoading(false); }
+  }, [id]);
+
+  const loadFTPAccounts = useCallback(async () => {
+    setFtpLoading(true);
+    try {
+      const r = await api.get<FTPAccount[]>(`/ftp?domain_id=${id}`);
+      setFtpAccounts(r);
+    } catch { /* ignore */ } finally { setFtpLoading(false); }
+  }, [id]);
+
   useEffect(() => { loadResources(); }, [loadResources]);
 
   useEffect(() => {
@@ -263,7 +368,13 @@ export default function DomainDetailPage() {
     if (tab === "dns" && resources.dns_zone) loadDNSRecords(resources.dns_zone.id);
     if (tab === "mail" && resources.mail_domain) loadMail(resources.mail_domain.id);
     if (tab === "spam") loadSpamConfig(resources.domain.server_id);
-  }, [tab, resources, loadDNSRecords, loadMail, loadSpamConfig]);
+    if (tab === "subdomains") loadSubdomains();
+    if (tab === "aliases") loadDomainAliases();
+    if (tab === "redirects") loadRedirects();
+    if (tab === "php") loadPHPSettings();
+    if (tab === "ftp") loadFTPAccounts();
+    if (tab === "website" && resources.website) setCustomDirectives("");
+  }, [tab, resources, loadDNSRecords, loadMail, loadSpamConfig, loadSubdomains, loadDomainAliases, loadRedirects, loadPHPSettings, loadFTPAccounts]);
 
   async function handleApplyTemplate() {
     if (!resources?.dns_zone) return;
@@ -504,6 +615,129 @@ export default function DomainDetailPage() {
     }
   }
 
+  async function handleCreateSubdomain() {
+    setSavingSubdomain(true);
+    try {
+      await api.post("/subdomains", { domain_id: id, ...subdomainForm });
+      setShowAddSubdomain(false);
+      setSubdomainForm({ name: "", document_root: "", php_version: "8.2" });
+      await loadSubdomains();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingSubdomain(false); }
+  }
+
+  async function handleDeleteSubdomain(subId: string) {
+    try {
+      await api.delete(`/subdomains/${subId}`);
+      setDeleteSubdomainId(null);
+      await loadSubdomains();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+  }
+
+  async function handleCreateDomainAlias() {
+    setSavingDomainAlias(true);
+    try {
+      await api.post("/domain-aliases", { domain_id: id, alias: domainAliasForm.alias });
+      setShowAddDomainAlias(false);
+      setDomainAliasForm({ alias: "" });
+      await loadDomainAliases();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingDomainAlias(false); }
+  }
+
+  async function handleDeleteDomainAlias(aliasId: string) {
+    try {
+      await api.delete(`/domain-aliases/${aliasId}`);
+      setDeleteDomainAliasId(null);
+      await loadDomainAliases();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+  }
+
+  async function handleCreateRedirect() {
+    setSavingRedirect(true);
+    try {
+      await api.post("/redirects", { domain_id: id, ...redirectForm, redirect_type: parseInt(redirectForm.redirect_type) });
+      setShowAddRedirect(false);
+      setRedirectForm({ source_path: "/", target_url: "", redirect_type: "301" });
+      await loadRedirects();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingRedirect(false); }
+  }
+
+  async function handleDeleteRedirect(rId: string) {
+    try {
+      await api.delete(`/redirects/${rId}`);
+      setDeleteRedirectId(null);
+      await loadRedirects();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+  }
+
+  async function handleSavePHP() {
+    if (!phpSettings) return;
+    setSavingPhp(true);
+    try {
+      const { domain_id: _d, ...phpRest } = phpSettings;
+      await api.put("/php-settings", { domain_id: id, ...phpRest });
+      await loadPHPSettings();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingPhp(false); }
+  }
+
+  async function handleCreateFTP() {
+    setSavingFTP(true);
+    try {
+      await api.post("/ftp", { domain_id: id, server_id: resources?.domain.server_id, ...ftpForm });
+      setShowAddFTP(false);
+      setFtpForm({ username: "", password: "", home_dir: "" });
+      await loadFTPAccounts();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingFTP(false); }
+  }
+
+  async function handleDeleteFTP(ftpId: string) {
+    try {
+      await api.delete(`/ftp/${ftpId}`);
+      setDeleteFTPId(null);
+      await loadFTPAccounts();
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+  }
+
+  async function handleUpdateFTPPassword() {
+    if (!editFTP) return;
+    setSavingFTPPw(true);
+    try {
+      await api.put(`/ftp/${editFTP.id}/password`, { password: ftpNewPassword });
+      setEditFTP(null);
+      setFtpNewPassword("");
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingFTPPw(false); }
+  }
+
+  async function handleUpdateRecord() {
+    if (!editRecord || !resources?.dns_zone) return;
+    setSavingEditRecord(true);
+    try {
+      await api.put(`/dns/records/${editRecord.id}`, {
+        ...editRecordForm,
+        ttl: parseInt(editRecordForm.ttl) || 3600,
+        priority: editRecordForm.priority ? parseInt(editRecordForm.priority) : undefined,
+      });
+      setEditRecord(null);
+      await loadDNSRecords(resources.dns_zone.id);
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingEditRecord(false); }
+  }
+
+  async function handleSaveCustomDirectives() {
+    if (!resources?.website) return;
+    setSavingDirectives(true);
+    try {
+      await api.put(`/websites/${resources.website.id}`, { custom_directives: customDirectives });
+      setError("");
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : "Fehler"); }
+    finally { setSavingDirectives(false); }
+  }
+
   if (loading) return <div className="text-muted-foreground text-sm p-4">Lade Domain…</div>;
   if (error && !resources) return <div className="text-destructive text-sm p-4">{error}</div>;
   if (!resources) return null;
@@ -577,23 +811,45 @@ export default function DomainDetailPage() {
 
       {/* ─── WEBSITE ─── */}
       {tab === "website" && (
-        <div className="bg-card border border-border rounded-lg p-5">
-          {website ? (
-            <div className="space-y-4">
-              <h3 className="font-medium text-foreground">Website-Konfiguration</h3>
-              <div className="grid grid-cols-2 gap-3">
-                <InfoCard label="Domain" value={website.domain} />
-                <InfoCard label="PHP" value={`PHP ${website.php_version}`} />
-                <InfoCard label="Document Root" value={website.document_root} mono />
-                <InfoCard label="SSL aktiv" value={website.ssl_enabled ? "Ja" : "Nein"} ok={website.ssl_enabled} />
-                <InfoCard label="Status" value={website.enabled ? "Aktiv" : "Deaktiviert"} ok={website.enabled} />
+        <div className="space-y-4">
+          <div className="bg-card border border-border rounded-lg p-5">
+            {website ? (
+              <div className="space-y-4">
+                <h3 className="font-medium text-foreground">Website-Konfiguration</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <InfoCard label="Domain" value={website.domain} />
+                  <InfoCard label="PHP" value={`PHP ${website.php_version}`} />
+                  <InfoCard label="Document Root" value={website.document_root} mono />
+                  <InfoCard label="SSL aktiv" value={website.ssl_enabled ? "Ja" : "Nein"} ok={website.ssl_enabled} />
+                  <InfoCard label="Status" value={website.enabled ? "Aktiv" : "Deaktiviert"} ok={website.enabled} />
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
-              <Globe className="w-8 h-8" />
-              <p className="text-sm">Noch keine Website für diese Domain angelegt.</p>
-              <p className="text-xs">Die Website wurde beim Domain-Erstellen automatisch provisioniert.</p>
+            ) : (
+              <div className="flex flex-col items-center gap-2 py-8 text-muted-foreground">
+                <Globe className="w-8 h-8" />
+                <p className="text-sm">Noch keine Website für diese Domain angelegt.</p>
+                <p className="text-xs">Die Website wurde beim Domain-Erstellen automatisch provisioniert.</p>
+              </div>
+            )}
+          </div>
+          {website && (
+            <div className="bg-card border border-border rounded-lg p-5 space-y-3">
+              <div>
+                <h3 className="font-medium text-foreground text-sm">Benutzerdefinierte Nginx-Direktiven</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Werden innerhalb des server{"{}"}-Blocks eingefügt</p>
+              </div>
+              <textarea
+                value={customDirectives}
+                onChange={e => setCustomDirectives(e.target.value)}
+                rows={6}
+                placeholder={"# z.B.:\nclient_max_body_size 100M;\nadd_header X-Frame-Options SAMEORIGIN;"}
+                className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:border-primary resize-y"
+              />
+              <div className="flex justify-end">
+                <Btn onClick={handleSaveCustomDirectives} disabled={savingDirectives}>
+                  {savingDirectives ? "Speichere…" : "Direktiven speichern"}
+                </Btn>
+              </div>
             </div>
           )}
         </div>
@@ -636,7 +892,7 @@ export default function DomainDetailPage() {
                         <th className="px-4 py-2">Inhalt</th>
                         <th className="px-4 py-2">TTL</th>
                         <th className="px-4 py-2">Prio</th>
-                        <th className="px-4 py-2 w-8"></th>
+                        <th className="px-4 py-2 w-16"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -656,7 +912,10 @@ export default function DomainDetailPage() {
                                 <button onClick={() => setDeleteRecordId(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
                               </div>
                             ) : (
-                              <button onClick={() => setDeleteRecordId(r.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                              <div className="flex gap-2">
+                                <button onClick={() => { setEditRecord(r); setEditRecordForm({ name: r.name, type: r.type, content: r.content, ttl: String(r.ttl), priority: r.priority ? String(r.priority) : "" }); }} className="text-muted-foreground hover:text-primary"><Edit2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => setDeleteRecordId(r.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                              </div>
                             )}
                           </td>
                         </tr>
@@ -1041,6 +1300,250 @@ export default function DomainDetailPage() {
         </div>
       )}
 
+      {/* ─── SUBDOMAINS ─── */}
+      {tab === "subdomains" && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="font-medium text-foreground text-sm">Subdomains</h3>
+            <Btn onClick={() => setShowAddSubdomain(true)}><Plus className="w-3 h-3 mr-1 inline" />Subdomain anlegen</Btn>
+          </div>
+          {subdomainsLoading ? (
+            <div className="p-4 text-sm text-muted-foreground">Lade Subdomains…</div>
+          ) : subdomains.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs text-left">
+                  <th className="px-4 py-2">Subdomain</th>
+                  <th className="px-4 py-2">Document Root</th>
+                  <th className="px-4 py-2">PHP</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {subdomains.map(s => (
+                  <tr key={s.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <td className="px-4 py-2 text-foreground font-mono">{s.name}.{domain.name}</td>
+                    <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{s.document_root}</td>
+                    <td className="px-4 py-2 text-muted-foreground">PHP {s.php_version}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${s.enabled ? "bg-green-500/20 text-green-400" : "bg-secondary text-muted-foreground"}`}>
+                        {s.enabled ? "Aktiv" : "Deaktiviert"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {deleteSubdomainId === s.id ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDeleteSubdomain(s.id)} className="text-destructive text-xs hover:underline">Ja</button>
+                          <button onClick={() => setDeleteSubdomainId(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteSubdomainId(s.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">Noch keine Subdomains für diese Domain.</div>
+          )}
+        </div>
+      )}
+
+      {/* ─── ALIASE ─── */}
+      {tab === "aliases" && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="font-medium text-foreground text-sm">Domain-Aliase</h3>
+            <Btn onClick={() => setShowAddDomainAlias(true)}><Plus className="w-3 h-3 mr-1 inline" />Alias anlegen</Btn>
+          </div>
+          {aliasesLoading ? (
+            <div className="p-4 text-sm text-muted-foreground">Lade Aliase…</div>
+          ) : domainAliases.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs text-left">
+                  <th className="px-4 py-2">Alias-Domain</th>
+                  <th className="px-4 py-2">Erstellt</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {domainAliases.map(a => (
+                  <tr key={a.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <td className="px-4 py-2 text-foreground font-mono">{a.alias}</td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs">{new Date(a.created_at).toLocaleDateString("de-DE")}</td>
+                    <td className="px-4 py-2">
+                      {deleteDomainAliasId === a.id ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDeleteDomainAlias(a.id)} className="text-destructive text-xs hover:underline">Ja</button>
+                          <button onClick={() => setDeleteDomainAliasId(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteDomainAliasId(a.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">Noch keine Domain-Aliase angelegt.</div>
+          )}
+        </div>
+      )}
+
+      {/* ─── WEITERLEITUNGEN ─── */}
+      {tab === "redirects" && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="font-medium text-foreground text-sm">HTTP-Weiterleitungen</h3>
+            <Btn onClick={() => setShowAddRedirect(true)}><Plus className="w-3 h-3 mr-1 inline" />Weiterleitung anlegen</Btn>
+          </div>
+          {redirectsLoading ? (
+            <div className="p-4 text-sm text-muted-foreground">Lade Weiterleitungen…</div>
+          ) : redirects.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs text-left">
+                  <th className="px-4 py-2">Quellpfad</th>
+                  <th className="px-4 py-2">Ziel-URL</th>
+                  <th className="px-4 py-2">Typ</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2 w-8"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {redirects.map(r => (
+                  <tr key={r.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <td className="px-4 py-2 text-foreground font-mono text-xs">{r.source_path}</td>
+                    <td className="px-4 py-2 text-muted-foreground text-xs truncate max-w-xs">{r.target_url}</td>
+                    <td className="px-4 py-2"><span className="px-1.5 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400">{r.redirect_type}</span></td>
+                    <td className="px-4 py-2">
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${r.enabled ? "bg-green-500/20 text-green-400" : "bg-secondary text-muted-foreground"}`}>
+                        {r.enabled ? "Aktiv" : "Deaktiviert"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {deleteRedirectId === r.id ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDeleteRedirect(r.id)} className="text-destructive text-xs hover:underline">Ja</button>
+                          <button onClick={() => setDeleteRedirectId(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteRedirectId(r.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">Noch keine Weiterleitungen angelegt.</div>
+          )}
+        </div>
+      )}
+
+      {/* ─── PHP ─── */}
+      {tab === "php" && (
+        <div className="bg-card border border-border rounded-lg p-5">
+          {phpLoading ? (
+            <div className="text-sm text-muted-foreground">Lade PHP-Einstellungen…</div>
+          ) : (
+            <div className="space-y-4">
+              <h3 className="font-medium text-foreground">PHP-FPM Pool-Einstellungen</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Memory Limit (MB)">
+                  <Input type="number" min="32" value={phpSettings?.memory_limit ?? 128}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), memory_limit: parseInt(e.target.value) || 128 }))} />
+                </Field>
+                <Field label="Max Execution Time (s)">
+                  <Input type="number" min="5" value={phpSettings?.max_execution_time ?? 30}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), max_execution_time: parseInt(e.target.value) || 30 }))} />
+                </Field>
+                <Field label="Upload Max Filesize (MB)">
+                  <Input type="number" min="1" value={phpSettings?.upload_max_filesize ?? 32}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), upload_max_filesize: parseInt(e.target.value) || 32 }))} />
+                </Field>
+                <Field label="Post Max Size (MB)">
+                  <Input type="number" min="1" value={phpSettings?.post_max_size ?? 32}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), post_max_size: parseInt(e.target.value) || 32 }))} />
+                </Field>
+                <Field label="Max Input Vars">
+                  <Input type="number" min="100" value={phpSettings?.max_input_vars ?? 1000}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), max_input_vars: parseInt(e.target.value) || 1000 }))} />
+                </Field>
+                <Field label="Display Errors">
+                  <Select value={phpSettings?.display_errors ? "1" : "0"}
+                    onChange={e => setPhpSettings(s => ({ ...(s ?? { domain_id: id, memory_limit: 128, max_execution_time: 30, upload_max_filesize: 32, post_max_size: 32, max_input_vars: 1000, display_errors: false }), display_errors: e.target.value === "1" }))}>
+                    <option value="0">Aus (Produktion)</option>
+                    <option value="1">An (Entwicklung)</option>
+                  </Select>
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <Btn onClick={handleSavePHP} disabled={savingPhp || !phpSettings}>
+                  {savingPhp ? "Speichere…" : "PHP-Einstellungen speichern"}
+                </Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── FTP ─── */}
+      {tab === "ftp" && (
+        <div className="bg-card border border-border rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <h3 className="font-medium text-foreground text-sm">FTP-Konten</h3>
+            <Btn onClick={() => setShowAddFTP(true)}><Plus className="w-3 h-3 mr-1 inline" />FTP-Konto anlegen</Btn>
+          </div>
+          {ftpLoading ? (
+            <div className="p-4 text-sm text-muted-foreground">Lade FTP-Konten…</div>
+          ) : ftpAccounts.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border text-muted-foreground text-xs text-left">
+                  <th className="px-4 py-2">Benutzername</th>
+                  <th className="px-4 py-2">Home-Verzeichnis</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2 w-16"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {ftpAccounts.map(f => (
+                  <tr key={f.id} className="border-b border-border/50 hover:bg-secondary/30">
+                    <td className="px-4 py-2 text-foreground font-mono">{f.username}</td>
+                    <td className="px-4 py-2 text-muted-foreground font-mono text-xs">{f.home_dir}</td>
+                    <td className="px-4 py-2">
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${f.enabled ? "bg-green-500/20 text-green-400" : "bg-secondary text-muted-foreground"}`}>
+                        {f.enabled ? "Aktiv" : "Deaktiviert"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      {deleteFTPId === f.id ? (
+                        <div className="flex gap-1">
+                          <button onClick={() => handleDeleteFTP(f.id)} className="text-destructive text-xs hover:underline">Ja</button>
+                          <button onClick={() => setDeleteFTPId(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button onClick={() => { setEditFTP(f); setFtpNewPassword(""); }} className="text-muted-foreground hover:text-primary"><Edit2 className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setDeleteFTPId(f.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="p-6 text-center text-sm text-muted-foreground">Noch keine FTP-Konten für diese Domain.</div>
+          )}
+        </div>
+      )}
+
       {/* ─── BENUTZER ─── */}
       {tab === "users" && (
         <div className="space-y-4">
@@ -1288,6 +1791,133 @@ export default function DomainDetailPage() {
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="ghost" onClick={() => setShowAddDB(false)}>Abbrechen</Btn>
             <Btn onClick={handleAddDB} disabled={savingDB || !dbForm.name || !dbForm.db_user || !dbForm.db_password}>{savingDB ? "Anlege…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {editRecord && (
+        <Modal title="DNS-Eintrag bearbeiten" onClose={() => setEditRecord(null)}>
+          <Field label="Name">
+            <Input value={editRecordForm.name} onChange={e => setEditRecordForm({ ...editRecordForm, name: e.target.value })} placeholder="@ oder subdomain" />
+          </Field>
+          <Field label="Typ">
+            <Select value={editRecordForm.type} onChange={e => setEditRecordForm({ ...editRecordForm, type: e.target.value as DNSRecord["type"] })}>
+              {["A", "AAAA", "CNAME", "MX", "TXT", "SRV", "CAA"].map(t => <option key={t}>{t}</option>)}
+            </Select>
+          </Field>
+          <Field label="Inhalt">
+            <Input value={editRecordForm.content} onChange={e => setEditRecordForm({ ...editRecordForm, content: e.target.value })} />
+          </Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="TTL">
+              <Input type="number" value={editRecordForm.ttl} onChange={e => setEditRecordForm({ ...editRecordForm, ttl: e.target.value })} />
+            </Field>
+            {(editRecordForm.type === "MX" || editRecordForm.type === "SRV") && (
+              <Field label="Priorität">
+                <Input type="number" value={editRecordForm.priority} onChange={e => setEditRecordForm({ ...editRecordForm, priority: e.target.value })} />
+              </Field>
+            )}
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setEditRecord(null)}>Abbrechen</Btn>
+            <Btn onClick={handleUpdateRecord} disabled={savingEditRecord || !editRecordForm.content}>{savingEditRecord ? "Speichere…" : "Speichern"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {showAddSubdomain && (
+        <Modal title="Subdomain anlegen" onClose={() => setShowAddSubdomain(false)}>
+          <Field label="Subdomain-Name">
+            <div className="flex items-center">
+              <Input value={subdomainForm.name} onChange={e => setSubdomainForm({ ...subdomainForm, name: e.target.value })} placeholder="shop" className="rounded-r-none" />
+              <span className="bg-secondary border border-l-0 border-border rounded-r-lg px-3 py-2 text-sm text-muted-foreground">.{domain.name}</span>
+            </div>
+          </Field>
+          <Field label="Document Root">
+            <Input value={subdomainForm.document_root} onChange={e => setSubdomainForm({ ...subdomainForm, document_root: e.target.value })} placeholder={`/var/www/${domain.name}/shop`} />
+          </Field>
+          <Field label="PHP-Version">
+            <Select value={subdomainForm.php_version} onChange={e => setSubdomainForm({ ...subdomainForm, php_version: e.target.value })}>
+              {["8.3", "8.2", "8.1", "8.0", "7.4"].map(v => <option key={v}>{v}</option>)}
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setShowAddSubdomain(false)}>Abbrechen</Btn>
+            <Btn onClick={handleCreateSubdomain} disabled={savingSubdomain || !subdomainForm.name}>{savingSubdomain ? "Anlege…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {showAddDomainAlias && (
+        <Modal title="Domain-Alias anlegen" onClose={() => setShowAddDomainAlias(false)}>
+          <Field label="Alias-Domain">
+            <Input value={domainAliasForm.alias} onChange={e => setDomainAliasForm({ alias: e.target.value })} placeholder="www.example.com" />
+          </Field>
+          <p className="text-xs text-muted-foreground">Der Alias wird im Nginx-Vhost als server_name eingetragen.</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setShowAddDomainAlias(false)}>Abbrechen</Btn>
+            <Btn onClick={handleCreateDomainAlias} disabled={savingDomainAlias || !domainAliasForm.alias}>{savingDomainAlias ? "Anlege…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {showAddRedirect && (
+        <Modal title="Weiterleitung anlegen" onClose={() => setShowAddRedirect(false)}>
+          <Field label="Quellpfad">
+            <Input value={redirectForm.source_path} onChange={e => setRedirectForm({ ...redirectForm, source_path: e.target.value })} placeholder="/alte-seite" />
+          </Field>
+          <Field label="Ziel-URL">
+            <Input value={redirectForm.target_url} onChange={e => setRedirectForm({ ...redirectForm, target_url: e.target.value })} placeholder="https://neue-seite.de/ziel" />
+          </Field>
+          <Field label="Typ">
+            <Select value={redirectForm.redirect_type} onChange={e => setRedirectForm({ ...redirectForm, redirect_type: e.target.value })}>
+              <option value="301">301 – Permanent</option>
+              <option value="302">302 – Temporär</option>
+            </Select>
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setShowAddRedirect(false)}>Abbrechen</Btn>
+            <Btn onClick={handleCreateRedirect} disabled={savingRedirect || !redirectForm.source_path || !redirectForm.target_url}>{savingRedirect ? "Anlege…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {showAddFTP && (
+        <Modal title="FTP-Konto anlegen" onClose={() => setShowAddFTP(false)}>
+          <Field label="Benutzername">
+            <Input value={ftpForm.username} onChange={e => setFtpForm({ ...ftpForm, username: e.target.value })} placeholder="ftpuser" />
+          </Field>
+          <Field label="Passwort">
+            <div className="relative">
+              <Input type={showFTPPw ? "text" : "password"} value={ftpForm.password} onChange={e => setFtpForm({ ...ftpForm, password: e.target.value })} />
+              <button type="button" className="absolute right-3 top-2 text-muted-foreground" onClick={() => setShowFTPPw(!showFTPPw)}>
+                {showFTPPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </Field>
+          <Field label="Home-Verzeichnis">
+            <Input value={ftpForm.home_dir} onChange={e => setFtpForm({ ...ftpForm, home_dir: e.target.value })} placeholder={`/var/www/${domain.name}`} />
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setShowAddFTP(false)}>Abbrechen</Btn>
+            <Btn onClick={handleCreateFTP} disabled={savingFTP || !ftpForm.username || !ftpForm.password}>{savingFTP ? "Anlege…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {editFTP && (
+        <Modal title={`FTP-Passwort ändern: ${editFTP.username}`} onClose={() => setEditFTP(null)}>
+          <Field label="Neues Passwort">
+            <div className="relative">
+              <Input type={showFTPEditPw ? "text" : "password"} value={ftpNewPassword} onChange={e => setFtpNewPassword(e.target.value)} placeholder="Neues Passwort" />
+              <button type="button" className="absolute right-3 top-2 text-muted-foreground" onClick={() => setShowFTPEditPw(!showFTPEditPw)}>
+                {showFTPEditPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setEditFTP(null)}>Abbrechen</Btn>
+            <Btn onClick={handleUpdateFTPPassword} disabled={savingFTPPw || !ftpNewPassword}>{savingFTPPw ? "Speichere…" : "Passwort ändern"}</Btn>
           </div>
         </Modal>
       )}

@@ -1,7 +1,9 @@
 package executor
 
 import (
+	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 )
 
@@ -16,4 +18,12 @@ func writeFileSafe(path string, content []byte) error {
 		return err
 	}
 	return os.WriteFile(filepath.Clean(path), content, 0644)
+}
+
+// runCmdInputOutput runs a command with stdin input and returns combined output.
+func runCmdInputOutput(stdin string, name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	cmd.Stdin = bytes.NewBufferString(stdin)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }

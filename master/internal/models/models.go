@@ -276,11 +276,67 @@ type DomainUser struct {
 
 // DomainResources bundles all resources associated with a domain.
 type DomainResources struct {
-	Domain    Domain            `json:"domain"`
-	Website   *Website          `json:"website,omitempty"`
-	DNSZone   *DNSZone          `json:"dns_zone,omitempty"`
-	MailDomain *MailDomain      `json:"mail_domain,omitempty"`
-	SSLCerts  []SSLCert         `json:"ssl_certs"`
-	Databases []ManagedDatabase `json:"databases"`
-	CronJobs  []CronJob         `json:"cron_jobs"`
+	Domain      Domain            `json:"domain"`
+	Website     *Website          `json:"website,omitempty"`
+	DNSZone     *DNSZone          `json:"dns_zone,omitempty"`
+	MailDomain  *MailDomain       `json:"mail_domain,omitempty"`
+	SSLCerts    []SSLCert         `json:"ssl_certs"`
+	Databases   []ManagedDatabase `json:"databases"`
+	CronJobs    []CronJob         `json:"cron_jobs"`
+	PHPSettings *PHPSettings      `json:"php_settings,omitempty"`
+}
+
+// Subdomain is an Nginx vhost for a sub-domain (blog.example.com).
+type Subdomain struct {
+	ID           string    `json:"id"`
+	DomainID     string    `json:"domain_id"`
+	ServerID     string    `json:"server_id"`
+	Name         string    `json:"name"`
+	DocumentRoot string    `json:"document_root"`
+	PHPVersion   string    `json:"php_version"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// DomainAlias is an additional server_name for the domain's vhost.
+type DomainAlias struct {
+	ID        string    `json:"id"`
+	DomainID  string    `json:"domain_id"`
+	Alias     string    `json:"alias"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// Redirect is a URL redirect rule on the domain.
+type Redirect struct {
+	ID           string    `json:"id"`
+	DomainID     string    `json:"domain_id"`
+	SourcePath   string    `json:"source_path"`
+	TargetURL    string    `json:"target_url"`
+	RedirectType int       `json:"redirect_type"`
+	Enabled      bool      `json:"enabled"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// PHPSettings stores per-domain PHP-FPM pool parameters.
+type PHPSettings struct {
+	ID                string    `json:"id"`
+	DomainID          string    `json:"domain_id"`
+	MemoryLimit       int       `json:"memory_limit"`
+	MaxExecutionTime  int       `json:"max_execution_time"`
+	UploadMaxFilesize int       `json:"upload_max_filesize"`
+	PostMaxSize       int       `json:"post_max_size"`
+	MaxInputVars      int       `json:"max_input_vars"`
+	DisplayErrors     bool      `json:"display_errors"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// FTPAccount represents a per-domain FTP user.
+type FTPAccount struct {
+	ID        string    `json:"id"`
+	DomainID  string    `json:"domain_id"`
+	ServerID  string    `json:"server_id"`
+	Username  string    `json:"username"`
+	HomeDir   string    `json:"home_dir"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
 }

@@ -106,15 +106,16 @@ func (s *WebsiteService) Get(ctx context.Context, id string) (*models.Website, e
 }
 
 type nginxVhostPayload struct {
-	Domain        string   `json:"domain"`
-	Aliases       []string `json:"aliases"`
-	PHPVersion    string   `json:"php_version"`
-	DocumentRoot  string   `json:"document_root"`
-	IndexFile     string   `json:"index_file"`
-	SSLEnabled    bool     `json:"ssl_enabled"`
-	SSLForceHTTPS bool     `json:"ssl_force_https"`
-	SSLCertPath   string   `json:"ssl_cert_path"`
-	SSLKeyPath    string   `json:"ssl_key_path"`
+	Domain           string   `json:"domain"`
+	Aliases          []string `json:"aliases"`
+	PHPVersion       string   `json:"php_version"`
+	DocumentRoot     string   `json:"document_root"`
+	IndexFile        string   `json:"index_file"`
+	SSLEnabled       bool     `json:"ssl_enabled"`
+	SSLForceHTTPS    bool     `json:"ssl_force_https"`
+	SSLCertPath      string   `json:"ssl_cert_path"`
+	SSLKeyPath       string   `json:"ssl_key_path"`
+	CustomDirectives string   `json:"custom_directives"`
 }
 
 // Create creates a new website on the agent and stores it in the database.
@@ -186,15 +187,20 @@ func (s *WebsiteService) Update(ctx context.Context, id string, updates map[stri
 	if v, ok := updates["ssl_force_https"].(bool); ok {
 		w.SSLForceHTTPS = v
 	}
+	customDirectives := ""
+	if v, ok := updates["custom_directives"].(string); ok {
+		customDirectives = v
+	}
 
 	payload := nginxVhostPayload{
-		Domain:        w.Domain,
-		Aliases:       w.Aliases,
-		PHPVersion:    w.PHPVersion,
-		DocumentRoot:  w.DocumentRoot,
-		IndexFile:     w.IndexFile,
-		SSLEnabled:    w.SSLEnabled,
-		SSLForceHTTPS: w.SSLForceHTTPS,
+		Domain:           w.Domain,
+		Aliases:          w.Aliases,
+		PHPVersion:       w.PHPVersion,
+		DocumentRoot:     w.DocumentRoot,
+		IndexFile:        w.IndexFile,
+		SSLEnabled:       w.SSLEnabled,
+		SSLForceHTTPS:    w.SSLForceHTTPS,
+		CustomDirectives: customDirectives,
 	}
 
 	_, err = ac.Put(ctx, "/nginx/vhosts/"+w.Domain, payload)
@@ -205,16 +211,17 @@ func (s *WebsiteService) Update(ctx context.Context, id string, updates map[stri
 	var certID *string
 	err = s.db.QueryRow(ctx, `
 		UPDATE websites SET
-			php_version    = $1,
-			document_root  = $2,
-			ssl_enabled    = $3,
-			ssl_force_https = $4,
-			updated_at     = NOW()
-		WHERE id = $5
+			php_version       = $1,
+			document_root     = $2,
+			ssl_enabled       = $3,
+			ssl_force_https   = $4,
+			custom_directives = $5,
+			updated_at        = NOW()
+		WHERE id = $6
 		RETURNING id, server_id, domain, aliases, php_version, document_root,
 		          index_file, ssl_enabled, ssl_force_https, ssl_cert_id,
 		          enabled, notes, created_at
-	`, w.PHPVersion, w.DocumentRoot, w.SSLEnabled, w.SSLForceHTTPS, id).Scan(
+	`, w.PHPVersion, w.DocumentRoot, w.SSLEnabled, w.SSLForceHTTPS, customDirectives, id).Scan(
 		&w.ID, &w.ServerID, &w.Domain, &w.Aliases, &w.PHPVersion, &w.DocumentRoot,
 		&w.IndexFile, &w.SSLEnabled, &w.SSLForceHTTPS, &certID,
 		&w.Enabled, &w.Notes, &w.CreatedAt,
