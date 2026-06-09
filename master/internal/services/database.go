@@ -134,7 +134,7 @@ type agentCreateDBPayload struct {
 }
 
 // Create creates a new database on the agent and stores the record in the database.
-func (s *DatabaseService) Create(ctx context.Context, serverID, name, dbType, dbUser, dbPassword string) (*models.ManagedDatabase, error) {
+func (s *DatabaseService) Create(ctx context.Context, serverID, name, dbType, dbUser, dbPassword, domainID string) (*models.ManagedDatabase, error) {
 	ac, err := s.agentFor(ctx, serverID)
 	if err != nil {
 		return nil, err
@@ -163,10 +163,10 @@ func (s *DatabaseService) Create(ctx context.Context, serverID, name, dbType, db
 
 	var mdb models.ManagedDatabase
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO managed_databases (server_id, name, db_type, db_user, db_password)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO managed_databases (server_id, name, db_type, db_user, db_password, domain_id)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::uuid)
 		RETURNING id, server_id, name, db_type, db_user, charset, db_collation, size_bytes, notes, created_at
-	`, serverID, name, dbType, dbUser, encryptedPw).Scan(
+	`, serverID, name, dbType, dbUser, encryptedPw, domainID).Scan(
 		&mdb.ID, &mdb.ServerID, &mdb.Name, &mdb.DBType, &mdb.DBUser,
 		&mdb.Charset, &mdb.Collation, &mdb.SizeBytes, &mdb.Notes, &mdb.CreatedAt,
 	)

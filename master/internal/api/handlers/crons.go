@@ -35,6 +35,7 @@ type createCronRequest struct {
 	Command   string `json:"command"`
 	Schedule  string `json:"schedule"`
 	RunAsUser string `json:"run_as_user"`
+	DomainID  string `json:"domain_id"`
 }
 
 // Create handles POST /api/crons
@@ -65,7 +66,7 @@ func (h *CronHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.RunAsUser = "www-data"
 	}
 
-	job, err := h.svc.Create(r.Context(), req.ServerID, req.Name, req.Command, req.Schedule, req.RunAsUser)
+	job, err := h.svc.Create(r.Context(), req.ServerID, req.Name, req.Command, req.Schedule, req.RunAsUser, req.DomainID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create cron job: "+err.Error())
 		return

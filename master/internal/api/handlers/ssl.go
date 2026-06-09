@@ -34,6 +34,7 @@ type issueSSLRequest struct {
 	Domain     string   `json:"domain"`
 	SANDomains []string `json:"san_domains"`
 	Email      string   `json:"email"`
+	DomainID   string   `json:"domain_id"`
 }
 
 // Issue handles POST /api/ssl
@@ -57,7 +58,7 @@ func (h *SSLHandler) Issue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cert, err := h.svc.Issue(r.Context(), req.ServerID, req.Domain, req.SANDomains, req.Email)
+	cert, err := h.svc.Issue(r.Context(), req.ServerID, req.Domain, req.SANDomains, req.Email, req.DomainID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to issue SSL cert: "+err.Error())
 		return

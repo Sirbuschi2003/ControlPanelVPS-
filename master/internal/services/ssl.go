@@ -80,7 +80,7 @@ type agentSSLIssueResponse struct {
 }
 
 // Issue requests a new certificate from the agent and records it in the database.
-func (s *SSLService) Issue(ctx context.Context, serverID, domain string, sanDomains []string, email string) (*models.SSLCert, error) {
+func (s *SSLService) Issue(ctx context.Context, serverID, domain string, sanDomains []string, email, domainID string) (*models.SSLCert, error) {
 	if sanDomains == nil {
 		sanDomains = []string{}
 	}
@@ -88,11 +88,11 @@ func (s *SSLService) Issue(ctx context.Context, serverID, domain string, sanDoma
 	// Insert pending record first
 	var cert models.SSLCert
 	err := s.db.QueryRow(ctx, `
-		INSERT INTO ssl_certs (server_id, domain, san_domains, status)
-		VALUES ($1, $2, $3, 'pending')
+		INSERT INTO ssl_certs (server_id, domain, san_domains, status, domain_id)
+		VALUES ($1, $2, $3, 'pending', NULLIF($4, '')::uuid)
 		RETURNING id, server_id, domain, san_domains, status, issuer,
 		          issued_at, expires_at, auto_renew, created_at
-	`, serverID, domain, sanDomains).Scan(
+	`, serverID, domain, sanDomains, domainID).Scan(
 		&cert.ID, &cert.ServerID, &cert.Domain, &cert.SANDomains, &cert.Status, &cert.Issuer,
 		&cert.IssuedAt, &cert.ExpiresAt, &cert.AutoRenew, &cert.CreatedAt,
 	)

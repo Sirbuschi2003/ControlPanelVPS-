@@ -70,7 +70,7 @@ type agentCronPayload struct {
 }
 
 // Create creates a new cron job on the agent and stores it in the database.
-func (s *CronService) Create(ctx context.Context, serverID, name, command, schedule, runAsUser string) (*models.CronJob, error) {
+func (s *CronService) Create(ctx context.Context, serverID, name, command, schedule, runAsUser, domainID string) (*models.CronJob, error) {
 	ac, err := s.agentFor(ctx, serverID)
 	if err != nil {
 		return nil, err
@@ -90,10 +90,10 @@ func (s *CronService) Create(ctx context.Context, serverID, name, command, sched
 
 	var j models.CronJob
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO cron_jobs (server_id, name, command, schedule, run_as_user)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO cron_jobs (server_id, name, command, schedule, run_as_user, domain_id)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::uuid)
 		RETURNING id, server_id, name, command, schedule, run_as_user, enabled, last_run, last_status, created_at
-	`, serverID, name, command, schedule, runAsUser).Scan(
+	`, serverID, name, command, schedule, runAsUser, domainID).Scan(
 		&j.ID, &j.ServerID, &j.Name, &j.Command, &j.Schedule, &j.RunAsUser,
 		&j.Enabled, &j.LastRun, &j.LastStatus, &j.CreatedAt,
 	)

@@ -37,6 +37,7 @@ type createDatabaseRequest struct {
 	DBType     string `json:"db_type"`
 	DBUser     string `json:"db_user"`
 	DBPassword string `json:"db_password"`
+	DomainID   string `json:"domain_id"`
 }
 
 // Create handles POST /api/databases
@@ -67,7 +68,7 @@ func (h *DatabaseHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := h.svc.Create(r.Context(), req.ServerID, req.Name, req.DBType, req.DBUser, req.DBPassword)
+	db, err := h.svc.Create(r.Context(), req.ServerID, req.Name, req.DBType, req.DBUser, req.DBPassword, req.DomainID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create database: "+err.Error())
 		return
