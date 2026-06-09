@@ -67,11 +67,18 @@ func RenewSSL(domain string) error {
 }
 
 // DeleteSSL deletes the certificate for the given domain using certbot.
+// If the certificate does not exist on disk, the function returns nil (idempotent).
 func DeleteSSL(domain string) error {
 	cmd := exec.Command("certbot", "delete", "--cert-name", domain, "--non-interactive")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("certbot delete failed: %s: %w", string(out), err)
+		output := string(out)
+		// Treat "not found" as success — cert was already removed or never issued
+		if strings.Contains(output, "No certificate found") ||
+			strings.Contains(output, "no certificate found") {
+			return nil
+		}
+		return fmt.Errorf("certbot delete failed: %s: %w", output, err)
 	}
 	return nil
 }
