@@ -156,6 +156,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Delete("/api/dns/zones/{id}", dnsHandler.DeleteZone)
 		r.Get("/api/dns/zones/{id}/records", dnsHandler.GetRecords)
 		r.Post("/api/dns/zones/{id}/records", dnsHandler.AddRecord)
+		r.Post("/api/dns/zones/{id}/apply-template", dnsHandler.ApplyTemplate)
 		r.Delete("/api/dns/records/{id}", dnsHandler.DeleteRecord)
 
 		// Mail

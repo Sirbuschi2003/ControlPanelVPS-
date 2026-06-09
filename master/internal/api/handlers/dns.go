@@ -151,3 +151,15 @@ func (h *DNSHandler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ApplyTemplate handles POST /api/dns/zones/{id}/apply-template
+// Applies the standard Plesk-style DNS template to an existing zone (idempotent).
+func (h *DNSHandler) ApplyTemplate(w http.ResponseWriter, r *http.Request) {
+	zoneID := chi.URLParam(r, "id")
+	records, err := h.svc.ApplyTemplate(r.Context(), zoneID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to apply DNS template: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, records)
+}

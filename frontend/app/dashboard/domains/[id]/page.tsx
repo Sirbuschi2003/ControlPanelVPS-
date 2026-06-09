@@ -265,6 +265,16 @@ export default function DomainDetailPage() {
     if (tab === "spam") loadSpamConfig(resources.domain.server_id);
   }, [tab, resources, loadDNSRecords, loadMail, loadSpamConfig]);
 
+  async function handleApplyTemplate() {
+    if (!resources?.dns_zone) return;
+    try {
+      const records = await api.post<DNSRecord[]>(`/dns/zones/${resources.dns_zone.id}/apply-template`, {});
+      setDnsRecords(records);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Fehler beim Template anwenden");
+    }
+  }
+
   async function handleAddRecord() {
     if (!resources?.dns_zone) return;
     setSavingRecord(true);
@@ -608,7 +618,12 @@ export default function DomainDetailPage() {
               <div className="bg-card border border-border rounded-lg overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <h3 className="font-medium text-foreground text-sm">DNS-Einträge</h3>
-                  <Btn onClick={() => setShowAddRecord(true)}><Plus className="w-3 h-3 mr-1 inline" />Eintrag hinzufügen</Btn>
+                  <div className="flex gap-2">
+                    <Btn variant="ghost" onClick={handleApplyTemplate} title="Standard-Einträge hinzufügen (A, www, MX, SPF, DMARC, NS…)">
+                      Standard-Template anwenden
+                    </Btn>
+                    <Btn onClick={() => setShowAddRecord(true)}><Plus className="w-3 h-3 mr-1 inline" />Eintrag hinzufügen</Btn>
+                  </div>
                 </div>
                 {dnsLoading ? (
                   <div className="p-4 text-sm text-muted-foreground">Lade Einträge…</div>
