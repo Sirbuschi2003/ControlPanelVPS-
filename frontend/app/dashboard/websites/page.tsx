@@ -101,7 +101,7 @@ export default function WebsitesPage() {
 
   async function handleToggle(id: string, enabled: boolean) {
     try {
-      await api.put(`/websites/${id}`, { enabled: !enabled });
+      await api.post(`/websites/${id}/toggle`, { enabled: !enabled });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -121,7 +121,7 @@ export default function WebsitesPage() {
   async function handleEnableSSL(id: string) {
     setSaving(true);
     try {
-      await api.put(`/websites/${id}/ssl`, { cert_id: sslCertId });
+      await api.post(`/websites/${id}/ssl`, { cert_id: sslCertId });
       setShowSSL(null);
       setSslCertId("");
       await load();

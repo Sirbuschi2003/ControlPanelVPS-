@@ -141,7 +141,7 @@ export default function DNSPage() {
   async function handleDeleteRecord(id: string) {
     if (!selectedZone) return;
     try {
-      await api.delete(`/dns/zones/${selectedZone.id}/records/${id}`);
+      await api.delete(`/dns/records/${id}`);
       setDeleteRecordId(null);
       await loadRecords(selectedZone.id);
     } catch (e: unknown) {

@@ -129,14 +129,9 @@ func (h *BackupHandler) RunBackup(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, job)
 }
 
-// ListJobs handles GET /api/backups/jobs?config_id=...
+// ListJobs handles GET /api/backups/jobs?config_id=... (config_id optional, returns all when omitted)
 func (h *BackupHandler) ListJobs(w http.ResponseWriter, r *http.Request) {
 	configID := r.URL.Query().Get("config_id")
-	if configID == "" {
-		writeError(w, http.StatusBadRequest, "config_id is required")
-		return
-	}
-
 	jobs, err := h.svc.ListJobs(r.Context(), configID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup jobs: "+err.Error())

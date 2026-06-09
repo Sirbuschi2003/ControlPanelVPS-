@@ -123,8 +123,14 @@ export default function CronsPage() {
   }
 
   async function handleToggle(id: string, enabled: boolean) {
+    const cron = crons.find((c) => c.id === id);
+    if (!cron) return;
     try {
-      await api.put(`/crons/${id}`, { enabled: !enabled });
+      await api.put(`/crons/${id}`, {
+        command: cron.command,
+        schedule: cron.schedule,
+        enabled: !enabled,
+      });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");

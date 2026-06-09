@@ -642,7 +642,7 @@ func (h *Handler) getLog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"log": name, "lines": logLines})
+	writeJSON(w, http.StatusOK, logLines)
 }
 
 // ─── File Manager ─────────────────────────────────────────────────────────────

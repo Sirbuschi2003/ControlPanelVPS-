@@ -273,12 +273,17 @@ func (s *BackupService) failJob(ctx context.Context, jobID, errMsg string) {
 	`, errMsg, now, jobID)
 }
 
-// ListJobs returns all backup jobs for a configuration.
+// ListJobs returns backup jobs. If configID is empty, all jobs are returned.
 func (s *BackupService) ListJobs(ctx context.Context, configID string) ([]models.BackupJob, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, config_id, status, size_bytes, file_path, error_message, started_at, finished_at
-		FROM backup_jobs WHERE config_id = $1 ORDER BY started_at DESC
-	`, configID)
+	query := `SELECT id, config_id, status, size_bytes, file_path, error_message, started_at, finished_at
+		FROM backup_jobs ORDER BY started_at DESC LIMIT 200`
+	args := []interface{}{}
+	if configID != "" {
+		query = `SELECT id, config_id, status, size_bytes, file_path, error_message, started_at, finished_at
+			FROM backup_jobs WHERE config_id = $1 ORDER BY started_at DESC LIMIT 200`
+		args = append(args, configID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query backup jobs: %w", err)
 	}

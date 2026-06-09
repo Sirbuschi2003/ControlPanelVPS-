@@ -107,10 +107,27 @@ export default function BackupsPage() {
   async function handleAdd() {
     setSaving(true);
     try {
+      const storageConfig: Record<string, string> = {};
+      if (form.storage_type === "s3") {
+        if (form.s3_bucket) storageConfig.bucket = form.s3_bucket;
+        if (form.s3_region) storageConfig.region = form.s3_region;
+        if (form.s3_access_key) storageConfig.access_key = form.s3_access_key;
+        if (form.s3_secret_key) storageConfig.secret_key = form.s3_secret_key;
+      } else if (form.storage_type === "sftp") {
+        if (form.sftp_host) storageConfig.host = form.sftp_host;
+        if (form.sftp_user) storageConfig.user = form.sftp_user;
+        if (form.sftp_password) storageConfig.password = form.sftp_password;
+        if (form.sftp_path) storageConfig.path = form.sftp_path;
+      }
       await api.post("/backups/configs", {
-        ...form,
+        server_id: form.server_id,
+        name: form.name,
+        storage_type: form.storage_type,
+        schedule: form.schedule,
         retention_days: parseInt(form.retention_days) || 30,
         include_paths: form.include_paths.split(",").map((s) => s.trim()),
+        storage_config: storageConfig,
+        encrypt: form.encrypt,
       });
       setShowAdd(false);
       setForm({
@@ -311,7 +328,7 @@ export default function BackupsPage() {
                     <td className="px-4 py-3 text-muted-foreground">{j.size_bytes ? formatBytes(j.size_bytes) : "-"}</td>
                     <td className="px-4 py-3 text-muted-foreground">{new Date(j.started_at).toLocaleString("de-DE")}</td>
                     <td className="px-4 py-3 text-muted-foreground">{duration(j)}</td>
-                    <td className="px-4 py-3 text-destructive text-xs">{j.error || "-"}</td>
+                    <td className="px-4 py-3 text-destructive text-xs">{j.error_message || "-"}</td>
                   </tr>
                 ))}
               </tbody>

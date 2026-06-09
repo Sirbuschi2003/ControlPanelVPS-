@@ -203,14 +203,9 @@ export interface BackupConfig {
   schedule: string;
   retention_days: number;
   include_paths: string[];
+  storage_config: Record<string, string>;
   encrypt: boolean;
   enabled: boolean;
-  s3_bucket?: string;
-  s3_region?: string;
-  s3_access_key?: string;
-  sftp_host?: string;
-  sftp_user?: string;
-  sftp_path?: string;
   created_at: string;
 }
 
@@ -222,7 +217,7 @@ export interface BackupJob {
   size_bytes: number;
   started_at: string;
   finished_at?: string;
-  error?: string;
+  error_message?: string;
 }
 
 export interface CronJob {
@@ -242,8 +237,9 @@ export interface CronJob {
 export interface SystemService {
   name: string;
   description: string;
-  active: boolean;
-  enabled: boolean;
+  active: string;
+  enabled: string;
+  load_state: string;
   status: string;
 }
 

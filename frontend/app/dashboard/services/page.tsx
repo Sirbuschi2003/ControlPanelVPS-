@@ -181,26 +181,26 @@ export default function ServicesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${svc.active ? "bg-green-400" : "bg-red-400"}`} />
-                        <span className={`text-sm ${svc.active ? "text-green-400" : "text-red-400"}`}>
-                          {svc.active ? "Aktiv" : "Inaktiv"}
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${svc.active === "active" ? "bg-green-400" : "bg-red-400"}`} />
+                        <span className={`text-sm ${svc.active === "active" ? "text-green-400" : "text-red-400"}`}>
+                          {svc.active === "active" ? "Aktiv" : "Inaktiv"}
                         </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
                       <button
-                        onClick={() => handleAction(svc.name, svc.enabled ? "disable" : "enable")}
+                        onClick={() => handleAction(svc.name, svc.enabled === "enabled" ? "disable" : "enable")}
                         disabled={actionLoading !== null}
                         className="text-muted-foreground hover:text-foreground transition-colors"
                       >
-                        {svc.enabled
+                        {svc.enabled === "enabled"
                           ? <ToggleRight className="w-5 h-5 text-green-400" />
                           : <ToggleLeft className="w-5 h-5" />}
                       </button>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {!svc.active ? (
+                        {svc.active !== "active" ? (
                           <button
                             onClick={() => handleAction(svc.name, "start")}
                             disabled={actionLoading !== null}
