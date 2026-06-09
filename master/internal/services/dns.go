@@ -31,12 +31,12 @@ func (s *DNSService) agentFor(ctx context.Context, serverID string) (*agent.Agen
 
 // ListZones returns all DNS zones for a server.
 func (s *DNSService) ListZones(ctx context.Context, serverID string) ([]models.DNSZone, error) {
-	query := `SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
+	query := `SELECT id, server_id, name, zone_type, master_ip, serial, refresh, retry, expire, minimum,
 		       nameserver, admin_email, created_at
 		FROM dns_zones ORDER BY created_at DESC`
 	args := []interface{}{}
 	if serverID != "" {
-		query = `SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
+		query = `SELECT id, server_id, name, zone_type, master_ip, serial, refresh, retry, expire, minimum,
 		       nameserver, admin_email, created_at
 		FROM dns_zones WHERE server_id = $1 ORDER BY created_at DESC`
 		args = append(args, serverID)
@@ -51,7 +51,8 @@ func (s *DNSService) ListZones(ctx context.Context, serverID string) ([]models.D
 	for rows.Next() {
 		var z models.DNSZone
 		if err := rows.Scan(
-			&z.ID, &z.ServerID, &z.Name, &z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
+			&z.ID, &z.ServerID, &z.Name, &z.ZoneType, &z.MasterIP,
+			&z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
 			&z.Nameserver, &z.AdminEmail, &z.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan dns zone: %w", err)
@@ -64,15 +65,21 @@ func (s *DNSService) ListZones(ctx context.Context, serverID string) ([]models.D
 	return zones, nil
 }
 
+// GetRecords returns the records for a DNS zone.
+func (s *DNSService) GetRecords(ctx context.Context, zoneID string) ([]models.DNSRecord, error) {
+	return s.recordsByZone(ctx, zoneID)
+}
+
 // GetZone returns a single DNS zone with its records.
 func (s *DNSService) GetZone(ctx context.Context, id string) (*models.DNSZone, error) {
 	var z models.DNSZone
 	err := s.db.QueryRow(ctx, `
-		SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
+		SELECT id, server_id, name, zone_type, master_ip, serial, refresh, retry, expire, minimum,
 		       nameserver, admin_email, created_at
 		FROM dns_zones WHERE id = $1
 	`, id).Scan(
-		&z.ID, &z.ServerID, &z.Name, &z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
+		&z.ID, &z.ServerID, &z.Name, &z.ZoneType, &z.MasterIP,
+		&z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
 		&z.Nameserver, &z.AdminEmail, &z.CreatedAt,
 	)
 	if err != nil {
@@ -113,6 +120,8 @@ func (s *DNSService) recordsByZone(ctx context.Context, zoneID string) ([]models
 
 type agentDNSZonePayload struct {
 	Name       string `json:"name"`
+	ZoneType   string `json:"zone_type"`
+	MasterIP   string `json:"master_ip,omitempty"`
 	Nameserver string `json:"nameserver"`
 	AdminEmail string `json:"admin_email"`
 }
@@ -162,8 +171,16 @@ func (s *DNSService) addDefaultRecords(ctx context.Context, zoneID, zoneName, se
 }
 
 // CreateZone creates a new DNS zone on the agent and stores it in the database.
-// After creation it automatically populates standard records (A, MX, SPF, DMARC).
-func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver, adminEmail string) (*models.DNSZone, error) {
+// zoneType is "master" or "slave". For slave zones, masterIP must be set.
+// Master zones are automatically populated with standard records (A, MX, SPF, DMARC).
+func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver, adminEmail, zoneType, masterIP string) (*models.DNSZone, error) {
+	if zoneType == "" {
+		zoneType = "master"
+	}
+	if zoneType == "slave" && masterIP == "" {
+		return nil, fmt.Errorf("master_ip is required for slave zones")
+	}
+
 	ac, err := s.agentFor(ctx, serverID)
 	if err != nil {
 		return nil, err
@@ -171,6 +188,8 @@ func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver,
 
 	payload := agentDNSZonePayload{
 		Name:       name,
+		ZoneType:   zoneType,
+		MasterIP:   masterIP,
 		Nameserver: nameserver,
 		AdminEmail: adminEmail,
 	}
@@ -180,25 +199,33 @@ func (s *DNSService) CreateZone(ctx context.Context, serverID, name, nameserver,
 		return nil, fmt.Errorf("agent create dns zone: %w", err)
 	}
 
+	var masterIPVal *string
+	if masterIP != "" {
+		masterIPVal = &masterIP
+	}
+
 	var z models.DNSZone
 	err = s.db.QueryRow(ctx, `
-		INSERT INTO dns_zones (server_id, name, nameserver, admin_email)
-		VALUES ($1, $2, $3, $4)
-		RETURNING id, server_id, name, serial, refresh, retry, expire, minimum,
+		INSERT INTO dns_zones (server_id, name, zone_type, master_ip, nameserver, admin_email)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, server_id, name, zone_type, master_ip, serial, refresh, retry, expire, minimum,
 		          nameserver, admin_email, created_at
-	`, serverID, name, nameserver, adminEmail).Scan(
-		&z.ID, &z.ServerID, &z.Name, &z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
+	`, serverID, name, zoneType, masterIPVal, nameserver, adminEmail).Scan(
+		&z.ID, &z.ServerID, &z.Name, &z.ZoneType, &z.MasterIP,
+		&z.Serial, &z.Refresh, &z.Retry, &z.Expire, &z.Minimum,
 		&z.Nameserver, &z.AdminEmail, &z.CreatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("insert dns zone: %w", err)
 	}
 
-	// Populate standard records using the server's public IP.
-	var serverIP string
-	_ = s.db.QueryRow(ctx, `SELECT ip_address FROM servers WHERE id = $1`, serverID).Scan(&serverIP)
-	if serverIP != "" {
-		s.addDefaultRecords(ctx, z.ID, z.Name, serverIP, adminEmail, ac)
+	// Slave zones get their records from the master — don't add defaults.
+	if zoneType == "master" {
+		var serverIP string
+		_ = s.db.QueryRow(ctx, `SELECT ip_address FROM servers WHERE id = $1`, serverID).Scan(&serverIP)
+		if serverIP != "" {
+			s.addDefaultRecords(ctx, z.ID, z.Name, serverIP, adminEmail, ac)
+		}
 	}
 
 	records, _ := s.recordsByZone(ctx, z.ID)

@@ -14,6 +14,8 @@ import (
 // ZoneConfig holds the metadata for a DNS zone.
 type ZoneConfig struct {
 	Name       string `json:"name"`
+	ZoneType   string `json:"zone_type"`
+	MasterIP   string `json:"master_ip"`
 	Nameserver string `json:"nameserver"`
 	AdminEmail string `json:"admin_email"`
 	Serial     int    `json:"serial"`
@@ -67,26 +69,39 @@ $TTL 3600
 `, cfg.Name, ns, email, serial, ns)
 }
 
-// CreateZone creates a BIND zone file and adds it to named.conf.local.
+// CreateZone creates a BIND zone and adds it to named.conf.local.
+// For master zones a zone file is written; for slave zones BIND fetches the data from masterIP.
 func CreateZone(cfg ZoneConfig) error {
 	if err := os.MkdirAll(bindZonesDir, 0755); err != nil {
 		return fmt.Errorf("creating zones dir: %w", err)
 	}
 
 	zoneFile := filepath.Join(bindZonesDir, cfg.Name+".zone")
-	content := buildZoneFile(cfg)
 
-	if err := os.WriteFile(zoneFile, []byte(content), 0644); err != nil {
-		return fmt.Errorf("writing zone file: %w", err)
-	}
-
-	// Add zone entry to named.conf.local
-	entry := fmt.Sprintf(`
+	var entry string
+	if cfg.ZoneType == "slave" {
+		// Slave zone: no local zone file — data is transferred from the master.
+		entry = fmt.Sprintf(`
+zone "%s" {
+    type slave;
+    masters { %s; };
+    file "%s";
+};
+`, cfg.Name, cfg.MasterIP, zoneFile)
+	} else {
+		// Master zone: write zone file with SOA + NS.
+		content := buildZoneFile(cfg)
+		if err := os.WriteFile(zoneFile, []byte(content), 0644); err != nil {
+			return fmt.Errorf("writing zone file: %w", err)
+		}
+		entry = fmt.Sprintf(`
 zone "%s" {
     type master;
     file "%s";
+    allow-transfer { any; };
 };
 `, cfg.Name, zoneFile)
+	}
 
 	confData, err := os.ReadFile(namedConfLocal)
 	if err != nil && !os.IsNotExist(err) {

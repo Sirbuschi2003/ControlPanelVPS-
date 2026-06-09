@@ -238,7 +238,7 @@ export default function DomainDetailPage() {
               </div>
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-gray-700">
-                  <Row label="Domain" value={mail_domain.name} />
+                  <Row label="Domain" value={mail_domain.domain} />
                 </tbody>
               </table>
             </>

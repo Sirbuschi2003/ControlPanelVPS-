@@ -18,7 +18,7 @@ func NewDNSHandler(svc *services.DNSService) *DNSHandler {
 	return &DNSHandler{svc: svc}
 }
 
-// ListZones handles GET /api/dns/zones?server_id=... (server_id optional, returns all when omitted)
+// ListZones handles GET /api/dns/zones?server_id=...
 func (h *DNSHandler) ListZones(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
 	zones, err := h.svc.ListZones(r.Context(), serverID)
@@ -32,11 +32,6 @@ func (h *DNSHandler) ListZones(w http.ResponseWriter, r *http.Request) {
 // GetZone handles GET /api/dns/zones/{id}
 func (h *DNSHandler) GetZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
-		return
-	}
-
 	zone, err := h.svc.GetZone(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "DNS zone not found: "+err.Error())
@@ -45,9 +40,22 @@ func (h *DNSHandler) GetZone(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, zone)
 }
 
+// GetRecords handles GET /api/dns/zones/{id}/records
+func (h *DNSHandler) GetRecords(w http.ResponseWriter, r *http.Request) {
+	zoneID := chi.URLParam(r, "id")
+	records, err := h.svc.GetRecords(r.Context(), zoneID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to get DNS records: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, records)
+}
+
 type createDNSZoneRequest struct {
 	ServerID   string `json:"server_id"`
 	Name       string `json:"name"`
+	ZoneType   string `json:"zone_type"`
+	MasterIP   string `json:"master_ip"`
 	Nameserver string `json:"nameserver"`
 	AdminEmail string `json:"admin_email"`
 }
@@ -59,13 +67,23 @@ func (h *DNSHandler) CreateZone(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
 	if req.ServerID == "" {
 		writeError(w, http.StatusBadRequest, "server_id is required")
 		return
 	}
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "name is required")
+		return
+	}
+	if req.ZoneType == "" {
+		req.ZoneType = "master"
+	}
+	if req.ZoneType != "master" && req.ZoneType != "slave" {
+		writeError(w, http.StatusBadRequest, "zone_type must be 'master' or 'slave'")
+		return
+	}
+	if req.ZoneType == "slave" && req.MasterIP == "" {
+		writeError(w, http.StatusBadRequest, "master_ip is required for slave zones")
 		return
 	}
 	if req.Nameserver == "" {
@@ -75,7 +93,7 @@ func (h *DNSHandler) CreateZone(w http.ResponseWriter, r *http.Request) {
 		req.AdminEmail = "admin@" + req.Name
 	}
 
-	zone, err := h.svc.CreateZone(r.Context(), req.ServerID, req.Name, req.Nameserver, req.AdminEmail)
+	zone, err := h.svc.CreateZone(r.Context(), req.ServerID, req.Name, req.Nameserver, req.AdminEmail, req.ZoneType, req.MasterIP)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create DNS zone: "+err.Error())
 		return
@@ -86,16 +104,11 @@ func (h *DNSHandler) CreateZone(w http.ResponseWriter, r *http.Request) {
 // DeleteZone handles DELETE /api/dns/zones/{id}
 func (h *DNSHandler) DeleteZone(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
-		return
-	}
-
 	if err := h.svc.DeleteZone(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete DNS zone: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "DNS zone deleted"})
+	w.WriteHeader(http.StatusNoContent)
 }
 
 type addDNSRecordRequest struct {
@@ -109,33 +122,18 @@ type addDNSRecordRequest struct {
 // AddRecord handles POST /api/dns/zones/{id}/records
 func (h *DNSHandler) AddRecord(w http.ResponseWriter, r *http.Request) {
 	zoneID := chi.URLParam(r, "id")
-	if zoneID == "" {
-		writeError(w, http.StatusBadRequest, "zone id is required")
-		return
-	}
-
 	var req addDNSRecordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "name is required")
-		return
-	}
-	if req.Type == "" {
-		writeError(w, http.StatusBadRequest, "type is required")
-		return
-	}
-	if req.Content == "" {
-		writeError(w, http.StatusBadRequest, "content is required")
+	if req.Name == "" || req.Type == "" || req.Content == "" {
+		writeError(w, http.StatusBadRequest, "name, type and content are required")
 		return
 	}
 	if req.TTL == 0 {
 		req.TTL = 3600
 	}
-
 	record, err := h.svc.AddRecord(r.Context(), zoneID, req.Name, req.Type, req.Content, req.TTL, req.Priority)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add DNS record: "+err.Error())
@@ -147,14 +145,9 @@ func (h *DNSHandler) AddRecord(w http.ResponseWriter, r *http.Request) {
 // DeleteRecord handles DELETE /api/dns/records/{id}
 func (h *DNSHandler) DeleteRecord(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if id == "" {
-		writeError(w, http.StatusBadRequest, "id is required")
-		return
-	}
-
 	if err := h.svc.DeleteRecord(r.Context(), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete DNS record: "+err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "DNS record deleted"})
+	w.WriteHeader(http.StatusNoContent)
 }

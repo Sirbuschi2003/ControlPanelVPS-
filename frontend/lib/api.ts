@@ -136,9 +136,12 @@ export interface DNSZone {
   server_id: string;
   server_name?: string;
   name: string;
+  zone_type: string;
+  master_ip?: string;
   nameserver: string;
   admin_email: string;
   serial: number;
+  records?: DNSRecord[];
   created_at: string;
 }
 
@@ -157,7 +160,8 @@ export interface MailDomain {
   id: string;
   server_id: string;
   server_name?: string;
-  name: string;
+  domain: string;
+  enabled: boolean;
   created_at: string;
 }
 

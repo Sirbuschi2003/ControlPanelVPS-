@@ -48,7 +48,7 @@ export default function DNSPage() {
   const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const [zoneForm, setZoneForm] = useState({ server_id: "", name: "", nameserver: "", admin_email: "" });
+  const [zoneForm, setZoneForm] = useState({ server_id: "", name: "", zone_type: "master", master_ip: "", nameserver: "", admin_email: "" });
   const [recordForm, setRecordForm] = useState({
     name: "",
     type: "A" as DNSRecord["type"],
@@ -96,7 +96,7 @@ export default function DNSPage() {
     try {
       await api.post("/dns/zones", zoneForm);
       setShowAddZone(false);
-      setZoneForm({ server_id: "", name: "", nameserver: "", admin_email: "" });
+      setZoneForm({ server_id: "", name: "", zone_type: "master", master_ip: "", nameserver: "", admin_email: "" });
       await loadZones();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -200,11 +200,16 @@ export default function DNSPage() {
                     selectedZone?.id === zone.id ? "bg-primary/10" : "hover:bg-accent"
                   }`}
                 >
-                  <div>
-                    <div className={`text-sm font-medium ${selectedZone?.id === zone.id ? "text-primary" : "text-foreground"}`}>
+                  <div className="min-w-0">
+                    <div className={`text-sm font-medium truncate ${selectedZone?.id === zone.id ? "text-primary" : "text-foreground"}`}>
                       {zone.name}
                     </div>
-                    <div className="text-xs text-muted-foreground">{zone.server_name || serverName(zone.server_id)}</div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-xs text-muted-foreground">{zone.server_name || serverName(zone.server_id)}</span>
+                      <span className={`px-1 py-0.5 rounded text-[10px] font-medium ${zone.zone_type === "slave" ? "bg-orange-500/20 text-orange-400" : "bg-blue-500/20 text-blue-400"}`}>
+                        {zone.zone_type ?? "master"}
+                      </span>
+                    </div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); setDeleteZoneId(zone.id); }}
@@ -330,32 +335,60 @@ export default function DNSPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Nameserver</label>
-              <input
-                type="text"
-                value={zoneForm.nameserver}
-                onChange={(e) => setZoneForm({ ...zoneForm, nameserver: e.target.value })}
-                placeholder="ns1.example.com"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-              />
+              <label className="block text-sm font-medium text-foreground mb-1">Zonentyp</label>
+              <select
+                value={zoneForm.zone_type}
+                onChange={(e) => setZoneForm({ ...zoneForm, zone_type: e.target.value, master_ip: "" })}
+                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
+              >
+                <option value="master">Master (autoritativ)</option>
+                <option value="slave">Slave (repliziert vom Master)</option>
+              </select>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Admin E-Mail</label>
-              <input
-                type="email"
-                value={zoneForm.admin_email}
-                onChange={(e) => setZoneForm({ ...zoneForm, admin_email: e.target.value })}
-                placeholder="admin@example.com"
-                className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
+            {zoneForm.zone_type === "slave" && (
+              <div>
+                <label className="block text-sm font-medium text-foreground mb-1">Master-IP *</label>
+                <input
+                  type="text"
+                  value={zoneForm.master_ip}
+                  onChange={(e) => setZoneForm({ ...zoneForm, master_ip: e.target.value })}
+                  placeholder="1.2.3.4"
+                  className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                />
+                <p className="text-xs text-muted-foreground mt-1">IP des Master-DNS-Servers</p>
+              </div>
+            )}
+            {zoneForm.zone_type === "master" && (
+              <>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Nameserver</label>
+                  <input
+                    type="text"
+                    value={zoneForm.nameserver}
+                    onChange={(e) => setZoneForm({ ...zoneForm, nameserver: e.target.value })}
+                    placeholder={`ns1.${zoneForm.name || "example.com"}`}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Admin E-Mail</label>
+                  <input
+                    type="email"
+                    value={zoneForm.admin_email}
+                    onChange={(e) => setZoneForm({ ...zoneForm, admin_email: e.target.value })}
+                    placeholder={`admin@${zoneForm.name || "example.com"}`}
+                    className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+              </>
+            )}
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => setShowAddZone(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors">
                 Abbrechen
               </button>
               <button
                 onClick={handleAddZone}
-                disabled={saving || !zoneForm.server_id || !zoneForm.name}
+                disabled={saving || !zoneForm.server_id || !zoneForm.name || (zoneForm.zone_type === "slave" && !zoneForm.master_ip)}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {saving ? "Wird erstellt..." : "Zone erstellen"}

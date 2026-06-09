@@ -154,6 +154,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Post("/api/dns/zones", dnsHandler.CreateZone)
 		r.Get("/api/dns/zones/{id}", dnsHandler.GetZone)
 		r.Delete("/api/dns/zones/{id}", dnsHandler.DeleteZone)
+		r.Get("/api/dns/zones/{id}/records", dnsHandler.GetRecords)
 		r.Post("/api/dns/zones/{id}/records", dnsHandler.AddRecord)
 		r.Delete("/api/dns/records/{id}", dnsHandler.DeleteRecord)
 

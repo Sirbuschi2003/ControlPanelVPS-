@@ -42,7 +42,7 @@ export default function MailPage() {
   const [showAddAlias, setShowAddAlias] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string } | null>(null);
 
-  const [domainForm, setDomainForm] = useState({ server_id: "", name: "" });
+  const [domainForm, setDomainForm] = useState({ server_id: "", domain: "" });
   const [accountForm, setAccountForm] = useState({ domain_id: "", username: "", password: "", quota_mb: "1000" });
   const [aliasForm, setAliasForm] = useState({ domain_id: "", source: "", destination: "" });
 
@@ -72,7 +72,7 @@ export default function MailPage() {
     try {
       await api.post("/mail/domains", domainForm);
       setShowAddDomain(false);
-      setDomainForm({ server_id: "", name: "" });
+      setDomainForm({ server_id: "", domain: "" });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -126,7 +126,7 @@ export default function MailPage() {
   }
 
   const serverName = (id: string) => servers.find((s) => s.id === id)?.name || id;
-  const domainName = (id: string) => domains.find((d) => d.id === id)?.name || id;
+  const domainName = (id: string) => domains.find((d) => d.id === id)?.domain || id;
 
   const filteredAccounts = filterDomain
     ? accounts.filter((a) => a.domain_id === filterDomain)
@@ -216,7 +216,7 @@ export default function MailPage() {
                   <tbody>
                     {domains.map((d) => (
                       <tr key={d.id} className="border-b border-border last:border-0 hover:bg-accent/50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{d.name}</td>
+                        <td className="px-4 py-3 font-medium text-foreground">{d.domain}</td>
                         <td className="px-4 py-3 text-muted-foreground">{d.server_name || serverName(d.server_id)}</td>
                         <td className="px-4 py-3 text-muted-foreground">{new Date(d.created_at).toLocaleDateString("de-DE")}</td>
                         <td className="px-4 py-3 text-right">
@@ -244,7 +244,7 @@ export default function MailPage() {
                   >
                     <option value="">Alle Domains</option>
                     {domains.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
+                      <option key={d.id} value={d.id}>{d.domain}</option>
                     ))}
                   </select>
                 </div>
@@ -345,8 +345,8 @@ export default function MailPage() {
               <label className="block text-sm font-medium text-foreground mb-1">Domain</label>
               <input
                 type="text"
-                value={domainForm.name}
-                onChange={(e) => setDomainForm({ ...domainForm, name: e.target.value })}
+                value={domainForm.domain}
+                onChange={(e) => setDomainForm({ ...domainForm, domain: e.target.value })}
                 placeholder="example.com"
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground"
               />
@@ -355,7 +355,7 @@ export default function MailPage() {
               <button onClick={() => setShowAddDomain(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors">Abbrechen</button>
               <button
                 onClick={handleAddDomain}
-                disabled={saving || !domainForm.server_id || !domainForm.name}
+                disabled={saving || !domainForm.server_id || !domainForm.domain}
                 className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {saving ? "Wird hinzugefügt..." : "Hinzufügen"}
@@ -377,7 +377,7 @@ export default function MailPage() {
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
               >
                 <option value="">Domain auswählen...</option>
-                {domains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {domains.map((d) => <option key={d.id} value={d.id}>{d.domain}</option>)}
               </select>
             </div>
             <div>
@@ -439,7 +439,7 @@ export default function MailPage() {
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
               >
                 <option value="">Domain auswählen...</option>
-                {domains.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                {domains.map((d) => <option key={d.id} value={d.id}>{d.domain}</option>)}
               </select>
             </div>
             <div>

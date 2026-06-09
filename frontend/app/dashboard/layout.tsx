@@ -36,15 +36,9 @@ const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Übersicht" },
   { href: "/dashboard/servers", icon: Server, label: "Server" },
   { href: "/dashboard/domains", icon: Layers, label: "Domains" },
-  { href: "/dashboard/websites", icon: Globe, label: "Websites" },
-  { href: "/dashboard/ssl", icon: Lock, label: "SSL/TLS" },
-  { href: "/dashboard/databases", icon: Database, label: "Datenbanken" },
-  { href: "/dashboard/dns", icon: Globe2, label: "DNS" },
-  { href: "/dashboard/mail", icon: Mail, label: "E-Mail" },
   { href: "/dashboard/firewall", icon: Shield, label: "Firewall" },
   { href: "/dashboard/backups", icon: HardDrive, label: "Backups" },
   { href: "/dashboard/services", icon: Activity, label: "Dienste" },
-  { href: "/dashboard/crons", icon: Clock, label: "Cron Jobs" },
   { href: "/dashboard/logs", icon: FileText, label: "Logs" },
   { href: "/dashboard/files", icon: Folder, label: "Dateien" },
   { href: "/dashboard/terminal", icon: Terminal, label: "Terminal" },
@@ -54,12 +48,30 @@ const navItems = [
   { href: "/dashboard/settings", icon: Settings, label: "Einstellungen" },
 ];
 
+const advancedNavItems = [
+  { href: "/dashboard/websites", icon: Globe, label: "Websites" },
+  { href: "/dashboard/ssl", icon: Lock, label: "SSL/TLS" },
+  { href: "/dashboard/databases", icon: Database, label: "Datenbanken" },
+  { href: "/dashboard/dns", icon: Globe2, label: "DNS" },
+  { href: "/dashboard/mail", icon: Mail, label: "E-Mail" },
+  { href: "/dashboard/crons", icon: Clock, label: "Cron Jobs" },
+];
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [user, setUser] = useState<User | null>(null);
   const [collapsed, setCollapsed] = useState(false);
+  const advancedPaths = ["/dashboard/websites", "/dashboard/ssl", "/dashboard/databases", "/dashboard/dns", "/dashboard/mail", "/dashboard/crons"];
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
+
+  // Auto-open "Erweitert" when on one of its pages
+  useEffect(() => {
+    if (advancedPaths.some(p => pathname.startsWith(p))) {
+      setAdvancedOpen(true);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -148,6 +160,36 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </Link>
             );
           })}
+
+          {/* Erweitert (collapsible) */}
+          <div>
+            <button
+              onClick={() => setAdvancedOpen(!advancedOpen)}
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors text-muted-foreground hover:text-foreground hover:bg-accent ${collapsed ? "justify-center" : ""}`}
+              title={collapsed ? "Erweitert" : undefined}
+            >
+              <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${advancedOpen ? "rotate-180" : ""}`} />
+              {!collapsed && <span className="flex-1 text-left">Erweitert</span>}
+            </button>
+            {advancedOpen && advancedNavItems.map(({ href, icon: Icon, label }) => {
+              const active = pathname === href || pathname.startsWith(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${collapsed ? "justify-center" : "pl-7"} ${
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
+                  }`}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon className="w-4 h-4 flex-shrink-0" />
+                  {!collapsed && <span className="truncate">{label}</span>}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         {/* Footer */}

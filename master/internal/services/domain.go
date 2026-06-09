@@ -127,7 +127,7 @@ func (s *DomainService) Create(ctx context.Context, serverID, name, ownerUserID,
 	var domainID string
 	err := s.db.QueryRow(ctx, `
 		INSERT INTO domains (server_id, name, owner_user_id, document_root, php_version, status)
-		VALUES ($1, $2, NULLIF($3, ''), $4, $5, 'provisioning')
+		VALUES ($1, $2, NULLIF($3, '')::uuid, $4, $5, 'provisioning')
 		RETURNING id
 	`, serverID, name, ownerUserID, docRoot, phpVersion).Scan(&domainID)
 	if err != nil {
@@ -153,7 +153,7 @@ func (s *DomainService) Create(ctx context.Context, serverID, name, ownerUserID,
 	if provisionDNS {
 		nameserver := "ns1." + name
 		adminEmail := "admin@" + name
-		zone, err := s.dnsSvc.CreateZone(ctx, serverID, name, nameserver, adminEmail)
+		zone, err := s.dnsSvc.CreateZone(ctx, serverID, name, nameserver, adminEmail, "master", "")
 		if err != nil {
 			provErrors = append(provErrors, fmt.Sprintf("dns: %v", err))
 		} else {
