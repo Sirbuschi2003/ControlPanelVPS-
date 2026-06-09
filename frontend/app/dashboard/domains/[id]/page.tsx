@@ -154,7 +154,7 @@ export default function DomainDetailPage() {
   const [showAddAccount, setShowAddAccount] = useState(false);
   const [showAddAlias, setShowAddAlias] = useState(false);
   const [deleteMailTarget, setDeleteMailTarget] = useState<{ type: "account" | "alias"; id: string } | null>(null);
-  const [accountForm, setAccountForm] = useState({ username: "", password: "", quota_mb: "0" });
+  const [accountForm, setAccountForm] = useState({ username: "", password: "", quota_mb: "0", quota_custom: false });
   const [aliasForm, setAliasForm] = useState({ source: "", destination: "" });
   const [showAccountPw, setShowAccountPw] = useState(false);
   const [savingMail, setSavingMail] = useState(false);
@@ -274,7 +274,7 @@ export default function DomainDetailPage() {
         quota_mb: parseInt(accountForm.quota_mb) || 0,
       });
       setShowAddAccount(false);
-      setAccountForm({ username: "", password: "", quota_mb: "0" });
+      setAccountForm({ username: "", password: "", quota_mb: "0", quota_custom: false });
       await loadMail(resources.mail_domain.id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -960,14 +960,36 @@ export default function DomainDetailPage() {
               </button>
             </div>
           </Field>
-          <Field label="Quota (0 = Unbegrenzt)">
-            <div className="flex gap-2">
-              <Input type="number" min="0" value={accountForm.quota_mb} onChange={e => setAccountForm({ ...accountForm, quota_mb: e.target.value })} placeholder="0" />
-              <button type="button" onClick={() => setAccountForm({ ...accountForm, quota_mb: "0" })}
-                className={`px-3 py-2 rounded-lg text-xs border transition-colors ${accountForm.quota_mb === "0" ? "bg-primary text-primary-foreground border-primary" : "bg-secondary text-muted-foreground border-border hover:text-foreground"}`}>
-                Unbegrenzt
-              </button>
-            </div>
+          <Field label="Postfachgröße">
+            <Select
+              value={accountForm.quota_custom ? "custom" : accountForm.quota_mb}
+              onChange={e => {
+                const v = e.target.value;
+                if (v === "custom") {
+                  setAccountForm({ ...accountForm, quota_custom: true, quota_mb: "500" });
+                } else {
+                  setAccountForm({ ...accountForm, quota_custom: false, quota_mb: v });
+                }
+              }}
+            >
+              <option value="0">Unbegrenzt</option>
+              <option value="100">100 MB</option>
+              <option value="250">250 MB</option>
+              <option value="500">500 MB</option>
+              <option value="1024">1 GB</option>
+              <option value="2048">2 GB</option>
+              <option value="5120">5 GB</option>
+              <option value="10240">10 GB</option>
+              <option value="custom">Benutzerdefiniert…</option>
+            </Select>
+            {accountForm.quota_custom && (
+              <div className="flex items-center gap-2 mt-2">
+                <Input type="number" min="1" value={accountForm.quota_mb}
+                  onChange={e => setAccountForm({ ...accountForm, quota_mb: e.target.value })}
+                  placeholder="z.B. 750" className="flex-1" />
+                <span className="text-sm text-muted-foreground">MB</span>
+              </div>
+            )}
           </Field>
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="ghost" onClick={() => setShowAddAccount(false)}>Abbrechen</Btn>

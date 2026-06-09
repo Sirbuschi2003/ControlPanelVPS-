@@ -43,7 +43,7 @@ export default function MailPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string } | null>(null);
 
   const [domainForm, setDomainForm] = useState({ server_id: "", domain: "" });
-  const [accountForm, setAccountForm] = useState({ domain_id: "", username: "", password: "", quota_mb: "0" });
+  const [accountForm, setAccountForm] = useState({ domain_id: "", username: "", password: "", quota_mb: "0", quota_custom: false });
   const [aliasForm, setAliasForm] = useState({ domain_id: "", source: "", destination: "" });
 
   async function load() {
@@ -86,7 +86,7 @@ export default function MailPage() {
     try {
       await api.post("/mail/accounts", { ...accountForm, quota_mb: parseInt(accountForm.quota_mb) || 0 });
       setShowAddAccount(false);
-      setAccountForm({ domain_id: "", username: "", password: "", quota_mb: "0" });
+      setAccountForm({ domain_id: "", username: "", password: "", quota_mb: "0", quota_custom: false });
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
@@ -405,13 +405,38 @@ export default function MailPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-foreground mb-1">Quota (MB)</label>
-              <input
-                type="number"
-                value={accountForm.quota_mb}
-                onChange={(e) => setAccountForm({ ...accountForm, quota_mb: e.target.value })}
+              <label className="block text-sm font-medium text-foreground mb-1">Postfachgröße</label>
+              <select
+                value={accountForm.quota_custom ? "custom" : accountForm.quota_mb}
+                onChange={e => {
+                  const v = e.target.value;
+                  if (v === "custom") {
+                    setAccountForm({ ...accountForm, quota_custom: true, quota_mb: "500" });
+                  } else {
+                    setAccountForm({ ...accountForm, quota_custom: false, quota_mb: v });
+                  }
+                }}
                 className="w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground"
-              />
+              >
+                <option value="0">Unbegrenzt</option>
+                <option value="100">100 MB</option>
+                <option value="250">250 MB</option>
+                <option value="500">500 MB</option>
+                <option value="1024">1 GB</option>
+                <option value="2048">2 GB</option>
+                <option value="5120">5 GB</option>
+                <option value="10240">10 GB</option>
+                <option value="custom">Benutzerdefiniert…</option>
+              </select>
+              {accountForm.quota_custom && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input type="number" min="1" value={accountForm.quota_mb}
+                    onChange={e => setAccountForm({ ...accountForm, quota_mb: e.target.value })}
+                    placeholder="z.B. 750"
+                    className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground" />
+                  <span className="text-sm text-muted-foreground">MB</span>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-2">
               <button onClick={() => setShowAddAccount(false)} className="px-4 py-2 text-sm border border-border rounded-lg hover:bg-accent transition-colors">Abbrechen</button>

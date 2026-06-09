@@ -121,9 +121,7 @@ func (h *MailHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "password is required")
 		return
 	}
-	if req.QuotaMB == 0 {
-		req.QuotaMB = 1024
-	}
+	// quota_mb=0 means unlimited — no default override
 
 	account, err := h.svc.CreateAccount(r.Context(), req.DomainID, req.Username, req.Password, req.QuotaMB)
 	if err != nil {
