@@ -219,7 +219,7 @@ func (s *BackupService) RunBackup(ctx context.Context, configID string) (*models
 		Encrypt:       c.Encrypt,
 	}
 
-	respBody, err := ac.Post(ctx, "/backups/"+configID, payload)
+	respBody, err := ac.Post(ctx, "/backups", payload)
 	if err != nil {
 		errMsg := err.Error()
 		s.failJob(context.Background(), job.ID, errMsg)

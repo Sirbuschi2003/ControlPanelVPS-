@@ -221,7 +221,7 @@ func (s *SSLService) Delete(ctx context.Context, id string) error {
 		return err
 	}
 
-	if err := ac.Delete(ctx, "/ssl/certs/"+domain); err != nil {
+	if err := ac.Delete(ctx, "/ssl/"+domain); err != nil {
 		return fmt.Errorf("agent delete ssl cert: %w", err)
 	}
 

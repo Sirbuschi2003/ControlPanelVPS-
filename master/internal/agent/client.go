@@ -97,6 +97,22 @@ func (c *AgentClient) Delete(ctx context.Context, path string) error {
 	return err
 }
 
+// DeleteWithBody serialises body as JSON and performs a DELETE request to the agent.
+func (c *AgentClient) DeleteWithBody(ctx context.Context, path string, body any) error {
+	var buf bytes.Buffer
+	if body != nil {
+		if err := json.NewEncoder(&buf).Encode(body); err != nil {
+			return fmt.Errorf("encode request body: %w", err)
+		}
+	}
+	req, err := c.newRequest(ctx, http.MethodDelete, path, &buf)
+	if err != nil {
+		return err
+	}
+	_, _, err = c.do(req)
+	return err
+}
+
 // PostForm serialises body as JSON and performs a POST request, returning the response
 // body, HTTP status code, and any error. Unlike Post it always returns the status code.
 func (c *AgentClient) PostForm(ctx context.Context, path string, body any) ([]byte, int, error) {

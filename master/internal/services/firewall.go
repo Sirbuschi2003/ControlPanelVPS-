@@ -147,8 +147,7 @@ func (s *FirewallService) Delete(ctx context.Context, id string) error {
 		Order:     r.RuleOrder,
 	}
 
-	_, err = ac.Post(ctx, "/firewall/rules/delete", delPayload)
-	if err != nil {
+	if err = ac.DeleteWithBody(ctx, "/firewall/rules", delPayload); err != nil {
 		return fmt.Errorf("agent delete firewall rule: %w", err)
 	}
 
