@@ -1,6 +1,8 @@
-# Go binaries
+# Compiled binaries
+bin/
 master/bin/
 agent/bin/
+frontend-standalone/
 *.exe
 *.exe~
 *.dll
@@ -17,6 +19,7 @@ frontend/node_modules/
 frontend/.next/
 frontend/out/
 frontend/.env.local
+frontend/next-env.d.ts
 
 # Environment files
 .env
@@ -44,4 +47,5 @@ certs/
 
 # Logs
 *.log
-logs/
+/logs/
+!/frontend/app/dashboard/logs/
