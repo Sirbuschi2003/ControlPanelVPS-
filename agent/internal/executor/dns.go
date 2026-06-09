@@ -31,8 +31,9 @@ type RecordRequest struct {
 }
 
 const (
-	bindZonesDir     = "/etc/bind/zones"
-	namedConfLocal   = "/etc/bind/named.conf.local"
+	bindZonesDir      = "/etc/bind/zones"
+	bindSlaveZonesDir = "/var/cache/bind"
+	namedConfLocal    = "/etc/bind/named.conf.local"
 )
 
 // buildZoneFile generates the content for a BIND zone file.
@@ -76,20 +77,21 @@ func CreateZone(cfg ZoneConfig) error {
 		return fmt.Errorf("creating zones dir: %w", err)
 	}
 
-	zoneFile := filepath.Join(bindZonesDir, cfg.Name+".zone")
-
 	var entry string
 	if cfg.ZoneType == "slave" {
-		// Slave zone: no local zone file — data is transferred from the master.
+		// Slave zone: BIND writes the transferred data to /var/cache/bind (writable by bind).
+		slaveFile := filepath.Join(bindSlaveZonesDir, cfg.Name+".zone")
 		entry = fmt.Sprintf(`
 zone "%s" {
     type slave;
     masters { %s; };
     file "%s";
+    notify no;
 };
-`, cfg.Name, cfg.MasterIP, zoneFile)
+`, cfg.Name, cfg.MasterIP, slaveFile)
 	} else {
 		// Master zone: write zone file with SOA + NS.
+		zoneFile := filepath.Join(bindZonesDir, cfg.Name+".zone")
 		content := buildZoneFile(cfg)
 		if err := os.WriteFile(zoneFile, []byte(content), 0644); err != nil {
 			return fmt.Errorf("writing zone file: %w", err)
@@ -99,6 +101,7 @@ zone "%s" {
     type master;
     file "%s";
     allow-transfer { any; };
+    notify yes;
 };
 `, cfg.Name, zoneFile)
 	}
@@ -125,10 +128,9 @@ zone "%s" {
 
 // DeleteZone removes the zone file and its entry from named.conf.local.
 func DeleteZone(name string) error {
-	zoneFile := filepath.Join(bindZonesDir, name+".zone")
-	if err := os.Remove(zoneFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("removing zone file: %w", err)
-	}
+	// Remove both master and slave zone files (only one will exist).
+	_ = os.Remove(filepath.Join(bindZonesDir, name+".zone"))
+	_ = os.Remove(filepath.Join(bindSlaveZonesDir, name+".zone"))
 
 	// Remove zone entry from named.conf.local
 	confData, err := os.ReadFile(namedConfLocal)
@@ -151,9 +153,18 @@ func DeleteZone(name string) error {
 	return ReloadDNS()
 }
 
+// zoneFilePath returns the path to a zone file, checking master location first.
+func zoneFilePath(zoneName string) string {
+	masterPath := filepath.Join(bindZonesDir, zoneName+".zone")
+	if _, err := os.Stat(masterPath); err == nil {
+		return masterPath
+	}
+	return filepath.Join(bindSlaveZonesDir, zoneName+".zone")
+}
+
 // AddRecord appends a DNS record to a zone file and increments the SOA serial.
 func AddRecord(zoneName string, rec RecordRequest) error {
-	zoneFile := filepath.Join(bindZonesDir, zoneName+".zone")
+	zoneFile := zoneFilePath(zoneName)
 
 	data, err := os.ReadFile(zoneFile)
 	if err != nil {
@@ -190,7 +201,7 @@ func AddRecord(zoneName string, rec RecordRequest) error {
 // DeleteRecord removes a DNS record from a zone file.
 // recordID is in the format "{zone}:{name}:{type}" or just the record line prefix.
 func DeleteRecord(zoneName, recordID string) error {
-	zoneFile := filepath.Join(bindZonesDir, zoneName+".zone")
+	zoneFile := zoneFilePath(zoneName)
 
 	data, err := os.ReadFile(zoneFile)
 	if err != nil {
