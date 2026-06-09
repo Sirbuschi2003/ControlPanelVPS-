@@ -58,6 +58,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	backupSvc := services.NewBackupService(db)
 	sysSvc := services.NewSystemServiceManager(db)
 	cronSvc := services.NewCronService(db)
+	domainSvc := services.NewDomainService(db, websiteSvc, dnsSvc, mailSvc)
 	logSvc := services.NewLogService(db)
 	fileSvc := services.NewFileService(db)
 	packageSvc := services.NewPackageService(db)
@@ -69,6 +70,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 
 	// ---- Handlers ----
 	terminalHandler := handlers.NewTerminalHandler(db)
+	domainHandler := handlers.NewDomainHandler(domainSvc)
 	authHandler := handlers.NewAuthHandler(authSvc)
 	serverHandler := handlers.NewServerHandler(serverSvc)
 	websiteHandler := handlers.NewWebsiteHandler(websiteSvc)
@@ -113,6 +115,19 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Put("/api/servers/{id}", serverHandler.Update)
 		r.Delete("/api/servers/{id}", serverHandler.Delete)
 		r.Get("/api/servers/{id}/metrics", serverHandler.GetMetrics)
+
+		// Domains (Plesk-like subscriptions)
+		r.Get("/api/domains", domainHandler.List)
+		r.Get("/api/domains/{id}", domainHandler.Get)
+		r.Get("/api/domains/{id}/resources", domainHandler.GetResources)
+		r.Group(func(r chi.Router) {
+			r.Use(authmw.AdminOnly)
+			r.Post("/api/domains", domainHandler.Create)
+			r.Delete("/api/domains/{id}", domainHandler.Delete)
+			r.Get("/api/domains/{id}/users", domainHandler.ListUsers)
+			r.Post("/api/domains/{id}/users", domainHandler.AssignUser)
+			r.Delete("/api/domains/{id}/users/{user_id}", domainHandler.RemoveUser)
+		})
 
 		// Websites
 		r.Get("/api/websites", websiteHandler.List)

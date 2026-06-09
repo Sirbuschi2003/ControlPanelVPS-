@@ -42,6 +42,13 @@ func Auth(authSvc *services.AuthService) func(http.Handler) http.Handler {
 	}
 }
 
+// GetClaims extracts JWT claims from the request context.
+// Returns nil if no claims are present (i.e. the Auth middleware wasn't applied).
+func GetClaims(r *http.Request) *services.Claims {
+	claims, _ := r.Context().Value(ClaimsKey).(*services.Claims)
+	return claims
+}
+
 // AdminOnly rejects requests from non-admin users with 403 Forbidden.
 // Must be used inside an Auth-protected route group.
 func AdminOnly(next http.Handler) http.Handler {

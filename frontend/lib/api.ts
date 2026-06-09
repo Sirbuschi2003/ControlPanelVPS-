@@ -288,6 +288,41 @@ export interface PanelUpdateResult {
   restarted_at: string;
 }
 
+export interface Domain {
+  id: string;
+  server_id: string;
+  server_name?: string;
+  server_ip?: string;
+  name: string;
+  owner_user_id?: string;
+  owner_name?: string;
+  document_root: string;
+  php_version: string;
+  status: string;
+  website_id?: string;
+  dns_zone_id?: string;
+  mail_domain_id?: string;
+  created_at: string;
+}
+
+export interface DomainUser {
+  domain_id: string;
+  user_id: string;
+  user_name?: string;
+  user_email?: string;
+  granted_at: string;
+}
+
+export interface DomainResources {
+  domain: Domain;
+  website?: Website;
+  dns_zone?: DNSZone;
+  mail_domain?: MailDomain;
+  ssl_certs: SSLCert[];
+  databases: ManagedDatabase[];
+  cron_jobs: CronJob[];
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B";
   const k = 1024;

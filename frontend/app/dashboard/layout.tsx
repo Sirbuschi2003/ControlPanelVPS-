@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Globe,
   Globe2,
+  Layers,
   Database,
   Mail,
   Shield,
@@ -34,6 +35,7 @@ import { api, type User, type PanelUpdateStatus } from "@/lib/api";
 const navItems = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Übersicht" },
   { href: "/dashboard/servers", icon: Server, label: "Server" },
+  { href: "/dashboard/domains", icon: Layers, label: "Domains" },
   { href: "/dashboard/websites", icon: Globe, label: "Websites" },
   { href: "/dashboard/ssl", icon: Lock, label: "SSL/TLS" },
   { href: "/dashboard/databases", icon: Database, label: "Datenbanken" },

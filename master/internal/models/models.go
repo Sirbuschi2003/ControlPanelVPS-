@@ -244,3 +244,41 @@ type PackageUpdate struct {
 	NewVersion     string `json:"new_version"`
 	Priority       string `json:"priority"`
 }
+
+// Domain is the central entity — one domain = one Plesk subscription.
+type Domain struct {
+	ID           string    `json:"id"`
+	ServerID     string    `json:"server_id"`
+	ServerName   string    `json:"server_name,omitempty"`
+	ServerIP     string    `json:"server_ip,omitempty"`
+	Name         string    `json:"name"`
+	OwnerUserID  *string   `json:"owner_user_id,omitempty"`
+	OwnerName    *string   `json:"owner_name,omitempty"`
+	DocumentRoot string    `json:"document_root"`
+	PHPVersion   string    `json:"php_version"`
+	Status       string    `json:"status"`
+	WebsiteID    *string   `json:"website_id,omitempty"`
+	DNSZoneID    *string   `json:"dns_zone_id,omitempty"`
+	MailDomainID *string   `json:"mail_domain_id,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+// DomainUser represents a user who has been granted access to a domain.
+type DomainUser struct {
+	DomainID  string    `json:"domain_id"`
+	UserID    string    `json:"user_id"`
+	UserName  string    `json:"user_name,omitempty"`
+	UserEmail string    `json:"user_email,omitempty"`
+	GrantedAt time.Time `json:"granted_at"`
+}
+
+// DomainResources bundles all resources associated with a domain.
+type DomainResources struct {
+	Domain    Domain            `json:"domain"`
+	Website   *Website          `json:"website,omitempty"`
+	DNSZone   *DNSZone          `json:"dns_zone,omitempty"`
+	MailDomain *MailDomain      `json:"mail_domain,omitempty"`
+	SSLCerts  []SSLCert         `json:"ssl_certs"`
+	Databases []ManagedDatabase `json:"databases"`
+	CronJobs  []CronJob         `json:"cron_jobs"`
+}
