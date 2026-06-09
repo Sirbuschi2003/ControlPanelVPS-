@@ -18,14 +18,9 @@ func NewDNSHandler(svc *services.DNSService) *DNSHandler {
 	return &DNSHandler{svc: svc}
 }
 
-// ListZones handles GET /api/dns/zones?server_id=...
+// ListZones handles GET /api/dns/zones?server_id=... (server_id optional, returns all when omitted)
 func (h *DNSHandler) ListZones(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
-
 	zones, err := h.svc.ListZones(r.Context(), serverID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list DNS zones: "+err.Error())

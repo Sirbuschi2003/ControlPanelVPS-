@@ -31,11 +31,17 @@ func (s *FirewallService) agentFor(ctx context.Context, serverID string) (*agent
 
 // List returns all firewall rules for a server.
 func (s *FirewallService) List(ctx context.Context, serverID string) ([]models.FirewallRule, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, rule_order, action, direction, protocol, source,
+	query := `SELECT id, server_id, rule_order, action, direction, protocol, source,
 		       dest_port, comment, enabled, created_at
-		FROM firewall_rules WHERE server_id = $1 ORDER BY rule_order ASC
-	`, serverID)
+		FROM firewall_rules ORDER BY server_id, rule_order ASC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, rule_order, action, direction, protocol, source,
+		       dest_port, comment, enabled, created_at
+		FROM firewall_rules WHERE server_id = $1 ORDER BY rule_order ASC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query firewall rules: %w", err)
 	}

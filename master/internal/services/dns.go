@@ -31,11 +31,17 @@ func (s *DNSService) agentFor(ctx context.Context, serverID string) (*agent.Agen
 
 // ListZones returns all DNS zones for a server.
 func (s *DNSService) ListZones(ctx context.Context, serverID string) ([]models.DNSZone, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
+	query := `SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
 		       nameserver, admin_email, created_at
-		FROM dns_zones WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+		FROM dns_zones ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, name, serial, refresh, retry, expire, minimum,
+		       nameserver, admin_email, created_at
+		FROM dns_zones WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query dns zones: %w", err)
 	}

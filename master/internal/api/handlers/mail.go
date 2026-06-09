@@ -20,14 +20,9 @@ func NewMailHandler(svc *services.MailService) *MailHandler {
 
 // ---- Domains ----
 
-// ListDomains handles GET /api/mail/domains?server_id=...
+// ListDomains handles GET /api/mail/domains?server_id=... (server_id optional, returns all when omitted)
 func (h *MailHandler) ListDomains(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
-
 	domains, err := h.svc.ListDomains(r.Context(), serverID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list mail domains: "+err.Error())

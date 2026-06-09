@@ -33,11 +33,17 @@ func (s *SSLService) agentFor(ctx context.Context, serverID string) (*agent.Agen
 
 // List returns all SSL certificates for a server.
 func (s *SSLService) List(ctx context.Context, serverID string) ([]models.SSLCert, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, domain, san_domains, status, issuer,
+	query := `SELECT id, server_id, domain, san_domains, status, issuer,
 		       issued_at, expires_at, auto_renew, created_at
-		FROM ssl_certs WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+		FROM ssl_certs ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, domain, san_domains, status, issuer,
+		       issued_at, expires_at, auto_renew, created_at
+		FROM ssl_certs WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query ssl certs: %w", err)
 	}

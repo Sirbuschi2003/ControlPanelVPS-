@@ -33,11 +33,17 @@ func (s *BackupService) agentFor(ctx context.Context, serverID string) (*agent.A
 
 // ListConfigs returns all backup configurations for a server.
 func (s *BackupService) ListConfigs(ctx context.Context, serverID string) ([]models.BackupConfig, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, name, storage_type, schedule, retention_days,
+	query := `SELECT id, server_id, name, storage_type, schedule, retention_days,
 		       include_paths, storage_config, encrypt, enabled, created_at
-		FROM backup_configs WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+		FROM backup_configs ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, name, storage_type, schedule, retention_days,
+		       include_paths, storage_config, encrypt, enabled, created_at
+		FROM backup_configs WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query backup configs: %w", err)
 	}

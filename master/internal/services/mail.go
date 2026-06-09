@@ -34,10 +34,15 @@ func (s *MailService) agentFor(ctx context.Context, serverID string) (*agent.Age
 
 // ListDomains returns all mail domains for a server.
 func (s *MailService) ListDomains(ctx context.Context, serverID string) ([]models.MailDomain, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, domain, enabled, created_at
-		FROM mail_domains WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+	query := `SELECT id, server_id, domain, enabled, created_at
+		FROM mail_domains ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, domain, enabled, created_at
+		FROM mail_domains WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query mail domains: %w", err)
 	}

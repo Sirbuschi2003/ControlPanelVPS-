@@ -18,14 +18,9 @@ func NewSSLHandler(svc *services.SSLService) *SSLHandler {
 	return &SSLHandler{svc: svc}
 }
 
-// List handles GET /api/ssl?server_id=...
+// List handles GET /api/ssl?server_id=... (server_id optional, returns all when omitted)
 func (h *SSLHandler) List(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
-
 	certs, err := h.svc.List(r.Context(), serverID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list SSL certs: "+err.Error())

@@ -31,10 +31,15 @@ func (s *CronService) agentFor(ctx context.Context, serverID string) (*agent.Age
 
 // List returns all cron jobs for a server.
 func (s *CronService) List(ctx context.Context, serverID string) ([]models.CronJob, error) {
-	rows, err := s.db.Query(ctx, `
-		SELECT id, server_id, name, command, schedule, run_as_user, enabled, last_run, last_status, created_at
-		FROM cron_jobs WHERE server_id = $1 ORDER BY created_at DESC
-	`, serverID)
+	query := `SELECT id, server_id, name, command, schedule, run_as_user, enabled, last_run, last_status, created_at
+		FROM cron_jobs ORDER BY created_at DESC`
+	args := []interface{}{}
+	if serverID != "" {
+		query = `SELECT id, server_id, name, command, schedule, run_as_user, enabled, last_run, last_status, created_at
+		FROM cron_jobs WHERE server_id = $1 ORDER BY created_at DESC`
+		args = append(args, serverID)
+	}
+	rows, err := s.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("query cron jobs: %w", err)
 	}

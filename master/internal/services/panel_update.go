@@ -83,8 +83,10 @@ func (s *PanelUpdateService) CheckUpdate(ctx context.Context) (*PanelUpdateCheck
 	available := false
 	if version.Commit == "dev" {
 		available = false
-	} else if latestCommit != "" && latestCommit != version.Commit {
-		available = true
+	} else if latestCommit != "" {
+		// Commit SHA is the authoritative signal — do NOT fall through to date
+		// comparison when SHAs match, because PublishedAt is always after build time.
+		available = latestCommit != version.Commit
 	} else if version.Date != "unknown" {
 		buildTime, err := time.Parse(time.RFC3339, version.Date)
 		if err == nil {

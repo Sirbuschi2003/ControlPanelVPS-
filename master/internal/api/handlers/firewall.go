@@ -18,14 +18,9 @@ func NewFirewallHandler(svc *services.FirewallService) *FirewallHandler {
 	return &FirewallHandler{svc: svc}
 }
 
-// List handles GET /api/firewall?server_id=...
+// List handles GET /api/firewall?server_id=... (server_id optional, returns all when omitted)
 func (h *FirewallHandler) List(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
-
 	rules, err := h.svc.List(r.Context(), serverID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list firewall rules: "+err.Error())

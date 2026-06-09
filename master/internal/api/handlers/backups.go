@@ -18,14 +18,9 @@ func NewBackupHandler(svc *services.BackupService) *BackupHandler {
 	return &BackupHandler{svc: svc}
 }
 
-// ListConfigs handles GET /api/backups/configs?server_id=...
+// ListConfigs handles GET /api/backups/configs?server_id=... (server_id optional, returns all when omitted)
 func (h *BackupHandler) ListConfigs(w http.ResponseWriter, r *http.Request) {
 	serverID := r.URL.Query().Get("server_id")
-	if serverID == "" {
-		writeError(w, http.StatusBadRequest, "server_id is required")
-		return
-	}
-
 	configs, err := h.svc.ListConfigs(r.Context(), serverID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list backup configs: "+err.Error())
