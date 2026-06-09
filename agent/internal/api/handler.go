@@ -36,6 +36,9 @@ func (h *Handler) registerRoutes() {
 	// Health — public, no auth
 	h.mux.HandleFunc("GET /health", h.health)
 
+	// Terminal — WebSocket PTY session
+	h.mux.HandleFunc("GET /terminal", auth(h.terminal))
+
 	// Metrics
 	h.mux.HandleFunc("GET /metrics", auth(h.metrics))
 
@@ -862,4 +865,8 @@ func (h *Handler) systemRunUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *Handler) terminal(w http.ResponseWriter, r *http.Request) {
+	executor.TerminalWebSocket(w, r)
 }

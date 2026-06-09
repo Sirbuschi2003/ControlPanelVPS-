@@ -68,6 +68,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	panelUpdateSvc := services.NewPanelUpdateService(cfg.InstallDir, cfg.GitHubRepo)
 
 	// ---- Handlers ----
+	terminalHandler := handlers.NewTerminalHandler(db)
 	authHandler := handlers.NewAuthHandler(authSvc)
 	serverHandler := handlers.NewServerHandler(serverSvc)
 	websiteHandler := handlers.NewWebsiteHandler(websiteSvc)
@@ -233,6 +234,9 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Post("/api/mail/setup-rspamd", monitoringHandler.SetupRspamd)
 		r.Post("/api/mail/dkim/{domain}", monitoringHandler.SetupDKIM)
 		r.Get("/api/mail/rspamd/status", monitoringHandler.RspamdStatus)
+
+		// Terminal — WebSocket proxy to agent PTY
+		r.Get("/api/terminal/ws", terminalHandler.WebSocket)
 	})
 
 	return r

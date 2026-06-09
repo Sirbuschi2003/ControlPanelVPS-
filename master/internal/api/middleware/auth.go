@@ -13,16 +13,23 @@ type contextKey string
 const ClaimsKey contextKey = "claims"
 
 // Auth validates the Bearer token and injects the claims into the request context.
+// For WebSocket connections the browser cannot set headers, so the token may
+// also be passed as ?token=... query parameter.
 func Auth(authSvc *services.AuthService) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			token := ""
 			header := r.Header.Get("Authorization")
-			if !strings.HasPrefix(header, "Bearer ") {
+			if strings.HasPrefix(header, "Bearer ") {
+				token = strings.TrimPrefix(header, "Bearer ")
+			} else if t := r.URL.Query().Get("token"); t != "" {
+				// WebSocket fallback: token passed as query parameter
+				token = t
+			}
+			if token == "" {
 				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
 				return
 			}
-
-			token := strings.TrimPrefix(header, "Bearer ")
 			claims, err := authSvc.ValidateToken(token)
 			if err != nil {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
