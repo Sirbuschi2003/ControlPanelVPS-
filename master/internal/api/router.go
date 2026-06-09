@@ -164,6 +164,7 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Delete("/api/mail/domains/{id}", mailHandler.DeleteDomain)
 		r.Get("/api/mail/accounts", mailHandler.ListAccounts)
 		r.Post("/api/mail/accounts", mailHandler.CreateAccount)
+		r.Put("/api/mail/accounts/{id}", mailHandler.UpdateAccount)
 		r.Delete("/api/mail/accounts/{id}", mailHandler.DeleteAccount)
 		r.Get("/api/mail/aliases", mailHandler.ListAliases)
 		r.Post("/api/mail/aliases", mailHandler.CreateAlias)
@@ -250,6 +251,8 @@ func NewRouter(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 		r.Post("/api/mail/setup-rspamd", monitoringHandler.SetupRspamd)
 		r.Post("/api/mail/dkim/{domain}", monitoringHandler.SetupDKIM)
 		r.Get("/api/mail/rspamd/status", monitoringHandler.RspamdStatus)
+		r.Get("/api/mail/spam/config", monitoringHandler.GetSpamConfig)
+		r.Put("/api/mail/spam/config", monitoringHandler.SetSpamConfig)
 
 		// Terminal — WebSocket proxy to agent PTY
 		r.Get("/api/terminal/ws", terminalHandler.WebSocket)

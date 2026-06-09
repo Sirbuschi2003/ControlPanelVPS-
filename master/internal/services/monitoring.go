@@ -115,3 +115,41 @@ func (s *MonitoringService) GetRspamdStatus(ctx context.Context, serverID string
 	}
 	return result, nil
 }
+
+// SpamConfig mirrors the agent's SpamConfig struct.
+type SpamConfig struct {
+	Enabled   bool    `json:"enabled"`
+	Reject    float64 `json:"reject"`
+	AddHeader float64 `json:"add_header"`
+	Greylist  float64 `json:"greylist"`
+}
+
+func (s *MonitoringService) GetSpamConfig(ctx context.Context, serverID string) (*SpamConfig, error) {
+	agentURL, token, err := s.store.GetServerAgentInfo(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+	c := agent.NewAgentClient(agentURL, token)
+	data, err := c.Get(ctx, "/mail/spam/config")
+	if err != nil {
+		return nil, fmt.Errorf("agent error: %w", err)
+	}
+	var cfg SpamConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+	return &cfg, nil
+}
+
+func (s *MonitoringService) SetSpamConfig(ctx context.Context, serverID string, cfg SpamConfig) error {
+	agentURL, token, err := s.store.GetServerAgentInfo(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+	c := agent.NewAgentClient(agentURL, token)
+	_, err = c.Put(ctx, "/mail/spam/config", cfg)
+	if err != nil {
+		return fmt.Errorf("agent error: %w", err)
+	}
+	return nil
+}

@@ -113,3 +113,46 @@ func (h *MonitoringHandler) RspamdStatus(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(stats)
 }
+
+func (h *MonitoringHandler) GetSpamConfig(w http.ResponseWriter, r *http.Request) {
+	serverID := r.URL.Query().Get("server_id")
+	if serverID == "" {
+		writeError(w, http.StatusBadRequest, "server_id is required")
+		return
+	}
+	cfg, err := h.svc.GetSpamConfig(r.Context(), serverID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (h *MonitoringHandler) SetSpamConfig(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ServerID  string  `json:"server_id"`
+		Enabled   bool    `json:"enabled"`
+		Reject    float64 `json:"reject"`
+		AddHeader float64 `json:"add_header"`
+		Greylist  float64 `json:"greylist"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.ServerID == "" {
+		writeError(w, http.StatusBadRequest, "server_id is required")
+		return
+	}
+	cfg := services.SpamConfig{
+		Enabled:   req.Enabled,
+		Reject:    req.Reject,
+		AddHeader: req.AddHeader,
+		Greylist:  req.Greylist,
+	}
+	if err := h.svc.SetSpamConfig(r.Context(), req.ServerID, cfg); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}

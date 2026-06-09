@@ -31,15 +31,20 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
+  Edit2,
+  Filter,
+  ToggleLeft,
+  ToggleRight,
 } from "lucide-react";
 
-type Tab = "overview" | "website" | "dns" | "mail" | "databases" | "ssl" | "crons" | "users";
+type Tab = "overview" | "website" | "dns" | "mail" | "spam" | "databases" | "ssl" | "crons" | "users";
 
 const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
   { id: "overview", label: "Übersicht", icon: Layers },
   { id: "website", label: "Website", icon: Globe },
   { id: "dns", label: "DNS", icon: Globe },
   { id: "mail", label: "E-Mail", icon: Mail },
+  { id: "spam", label: "Spam-Filter", icon: Filter },
   { id: "databases", label: "Datenbanken", icon: Database },
   { id: "ssl", label: "SSL/TLS", icon: Shield },
   { id: "crons", label: "Cron Jobs", icon: Clock },
@@ -158,6 +163,16 @@ export default function DomainDetailPage() {
   const [aliasForm, setAliasForm] = useState({ source: "", destination: "" });
   const [showAccountPw, setShowAccountPw] = useState(false);
   const [savingMail, setSavingMail] = useState(false);
+  const [editAccount, setEditAccount] = useState<MailAccount | null>(null);
+  const [editAccountForm, setEditAccountForm] = useState({ password: "", quota_mb: "0", quota_custom: false });
+  const [showEditAccountPw, setShowEditAccountPw] = useState(false);
+  const [savingEditAccount, setSavingEditAccount] = useState(false);
+
+  // Spam filter
+  const [spamConfig, setSpamConfig] = useState<{ enabled: boolean; reject: number; add_header: number; greylist: number } | null>(null);
+  const [spamLoading, setSpamLoading] = useState(false);
+  const [savingSpam, setSavingSpam] = useState(false);
+  const [spamStats, setSpamStats] = useState<Record<string, unknown> | null>(null);
 
   // SSL
   const [showAddSSL, setShowAddSSL] = useState(false);
@@ -225,13 +240,30 @@ export default function DomainDetailPage() {
     }
   }, []);
 
+  const loadSpamConfig = useCallback(async (serverId: string) => {
+    setSpamLoading(true);
+    try {
+      const [cfg, stats] = await Promise.all([
+        api.get<{ enabled: boolean; reject: number; add_header: number; greylist: number }>(`/mail/spam/config?server_id=${serverId}`),
+        api.get<Record<string, unknown>>(`/mail/rspamd/status?server_id=${serverId}`),
+      ]);
+      setSpamConfig(cfg);
+      setSpamStats(stats);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Spam-Filter-Fehler");
+    } finally {
+      setSpamLoading(false);
+    }
+  }, []);
+
   useEffect(() => { loadResources(); }, [loadResources]);
 
   useEffect(() => {
     if (!resources) return;
     if (tab === "dns" && resources.dns_zone) loadDNSRecords(resources.dns_zone.id);
     if (tab === "mail" && resources.mail_domain) loadMail(resources.mail_domain.id);
-  }, [tab, resources, loadDNSRecords, loadMail]);
+    if (tab === "spam") loadSpamConfig(resources.domain.server_id);
+  }, [tab, resources, loadDNSRecords, loadMail, loadSpamConfig]);
 
   async function handleAddRecord() {
     if (!resources?.dns_zone) return;
@@ -313,6 +345,39 @@ export default function DomainDetailPage() {
       await loadMail(resources.mail_domain.id);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Fehler");
+    }
+  }
+
+  async function handleUpdateAccount() {
+    if (!editAccount || !resources?.mail_domain) return;
+    setSavingEditAccount(true);
+    try {
+      await api.put(`/mail/accounts/${editAccount.id}`, {
+        password: editAccountForm.password,
+        quota_mb: parseInt(editAccountForm.quota_mb) || 0,
+      });
+      setEditAccount(null);
+      setEditAccountForm({ password: "", quota_mb: "0", quota_custom: false });
+      await loadMail(resources.mail_domain.id);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setSavingEditAccount(false);
+    }
+  }
+
+  async function handleSaveSpam() {
+    if (!spamConfig || !resources) return;
+    setSavingSpam(true);
+    try {
+      await api.put("/mail/spam/config", {
+        server_id: resources.domain.server_id,
+        ...spamConfig,
+      });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Fehler");
+    } finally {
+      setSavingSpam(false);
     }
   }
 
@@ -649,7 +714,18 @@ export default function DomainDetailPage() {
                                   <button onClick={() => setDeleteMailTarget(null)} className="text-muted-foreground text-xs hover:underline">Nein</button>
                                 </div>
                               ) : (
-                                <button onClick={() => setDeleteMailTarget({ type: "account", id: acc.id })} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setEditAccount(acc);
+                                      setEditAccountForm({ password: "", quota_mb: String(acc.quota_mb), quota_custom: false });
+                                    }}
+                                    className="text-muted-foreground hover:text-primary"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={() => setDeleteMailTarget({ type: "account", id: acc.id })} className="text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -709,6 +785,97 @@ export default function DomainDetailPage() {
             <div className="bg-card border border-border rounded-lg p-8 flex flex-col items-center gap-2 text-muted-foreground">
               <Mail className="w-8 h-8" />
               <p className="text-sm">Noch keine Mail-Domain für diese Domain.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── SPAM-FILTER ─── */}
+      {tab === "spam" && (
+        <div className="space-y-4">
+          {spamLoading ? (
+            <div className="text-sm text-muted-foreground p-4">Lade Spam-Filter-Konfiguration…</div>
+          ) : spamConfig ? (
+            <>
+              <div className="bg-card border border-border rounded-lg p-5 space-y-5">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-medium text-foreground">Rspamd Spam-Filter</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Schwellenwerte für eingehende E-Mails</p>
+                  </div>
+                  <button
+                    onClick={() => setSpamConfig({ ...spamConfig, enabled: !spamConfig.enabled })}
+                    className="flex items-center gap-2 text-sm font-medium transition-colors"
+                  >
+                    {spamConfig.enabled
+                      ? <><ToggleRight className="w-7 h-7 text-green-400" /><span className="text-green-400">Aktiv</span></>
+                      : <><ToggleLeft className="w-7 h-7 text-muted-foreground" /><span className="text-muted-foreground">Deaktiviert</span></>
+                    }
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4">
+                  <Field label="Ablehnen ab Score">
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={spamConfig.reject}
+                      onChange={e => setSpamConfig({ ...spamConfig, reject: parseFloat(e.target.value) || 15 })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Mails mit Score ≥ diesem Wert werden abgelehnt</p>
+                  </Field>
+                  <Field label="Header hinzufügen ab Score">
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={spamConfig.add_header}
+                      onChange={e => setSpamConfig({ ...spamConfig, add_header: parseFloat(e.target.value) || 6 })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">X-Spam-Flag Header wird gesetzt</p>
+                  </Field>
+                  <Field label="Greylisting ab Score">
+                    <Input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={spamConfig.greylist}
+                      onChange={e => setSpamConfig({ ...spamConfig, greylist: parseFloat(e.target.value) || 4 })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Temporäre Ablehnung, erneuter Versuch erforderlich</p>
+                  </Field>
+                </div>
+
+                <div className="flex justify-end">
+                  <Btn onClick={handleSaveSpam} disabled={savingSpam}>
+                    {savingSpam ? "Speichere…" : "Einstellungen speichern"}
+                  </Btn>
+                </div>
+              </div>
+
+              {spamStats && (
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <h4 className="text-sm font-medium text-foreground mb-3">Statistiken</h4>
+                  <div className="grid grid-cols-3 gap-3">
+                    {["scanned", "spam_count", "ham_count"].map(key => (
+                      spamStats[key] !== undefined && (
+                        <InfoCard
+                          key={key}
+                          label={key === "scanned" ? "Geprüft" : key === "spam_count" ? "Als Spam markiert" : "Ham (kein Spam)"}
+                          value={String(spamStats[key])}
+                        />
+                      )
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="bg-card border border-border rounded-lg p-8 flex flex-col items-center gap-2 text-muted-foreground">
+              <Filter className="w-8 h-8" />
+              <p className="text-sm">Spam-Filter-Konfiguration konnte nicht geladen werden.</p>
+              <Btn variant="ghost" onClick={() => loadSpamConfig(resources.domain.server_id)}>Erneut versuchen</Btn>
             </div>
           )}
         </div>
@@ -1009,6 +1176,59 @@ export default function DomainDetailPage() {
           <div className="flex justify-end gap-2 pt-2">
             <Btn variant="ghost" onClick={() => setShowAddAlias(false)}>Abbrechen</Btn>
             <Btn onClick={handleAddAlias} disabled={savingMail || !aliasForm.source || !aliasForm.destination}>{savingMail ? "Speichere…" : "Anlegen"}</Btn>
+          </div>
+        </Modal>
+      )}
+
+      {editAccount && (
+        <Modal title={`Postfach bearbeiten: ${editAccount.username}@${mail_domain?.domain}`} onClose={() => setEditAccount(null)}>
+          <Field label="Neues Passwort (leer lassen = unverändert)">
+            <div className="relative">
+              <Input
+                type={showEditAccountPw ? "text" : "password"}
+                value={editAccountForm.password}
+                onChange={e => setEditAccountForm({ ...editAccountForm, password: e.target.value })}
+                placeholder="Neues Passwort eingeben…"
+              />
+              <button type="button" className="absolute right-3 top-2 text-muted-foreground" onClick={() => setShowEditAccountPw(!showEditAccountPw)}>
+                {showEditAccountPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </Field>
+          <Field label="Postfachgröße">
+            <Select
+              value={editAccountForm.quota_custom ? "custom" : editAccountForm.quota_mb}
+              onChange={e => {
+                const v = e.target.value;
+                if (v === "custom") {
+                  setEditAccountForm({ ...editAccountForm, quota_custom: true, quota_mb: "500" });
+                } else {
+                  setEditAccountForm({ ...editAccountForm, quota_custom: false, quota_mb: v });
+                }
+              }}
+            >
+              <option value="0">Unbegrenzt</option>
+              <option value="100">100 MB</option>
+              <option value="250">250 MB</option>
+              <option value="500">500 MB</option>
+              <option value="1024">1 GB</option>
+              <option value="2048">2 GB</option>
+              <option value="5120">5 GB</option>
+              <option value="10240">10 GB</option>
+              <option value="custom">Benutzerdefiniert…</option>
+            </Select>
+            {editAccountForm.quota_custom && (
+              <div className="flex items-center gap-2 mt-2">
+                <Input type="number" min="1" value={editAccountForm.quota_mb}
+                  onChange={e => setEditAccountForm({ ...editAccountForm, quota_mb: e.target.value })}
+                  placeholder="z.B. 750" className="flex-1" />
+                <span className="text-sm text-muted-foreground">MB</span>
+              </div>
+            )}
+          </Field>
+          <div className="flex justify-end gap-2 pt-2">
+            <Btn variant="ghost" onClick={() => setEditAccount(null)}>Abbrechen</Btn>
+            <Btn onClick={handleUpdateAccount} disabled={savingEditAccount}>{savingEditAccount ? "Speichere…" : "Speichern"}</Btn>
           </div>
         </Modal>
       )}

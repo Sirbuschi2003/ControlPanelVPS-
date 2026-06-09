@@ -213,6 +213,64 @@ func (s *MailService) DeleteAccount(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateAccount changes password and/or quota of a mail account.
+// Pass password="" to keep the current one.
+func (s *MailService) UpdateAccount(ctx context.Context, id, password string, quotaMB int) (*models.MailAccount, error) {
+	var username, domainID string
+	err := s.db.QueryRow(ctx, `SELECT domain_id, username FROM mail_accounts WHERE id = $1`, id).
+		Scan(&domainID, &username)
+	if err != nil {
+		return nil, fmt.Errorf("mail account not found: %w", err)
+	}
+
+	var domain, serverID string
+	err = s.db.QueryRow(ctx, `SELECT server_id, domain FROM mail_domains WHERE id = $1`, domainID).
+		Scan(&serverID, &domain)
+	if err != nil {
+		return nil, fmt.Errorf("mail domain not found: %w", err)
+	}
+
+	ac, err := s.agentFor(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	email := username + "@" + domain
+	_, err = ac.Put(ctx, "/mail/accounts/"+email, map[string]any{
+		"password": password,
+		"quota_mb": quotaMB,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("agent update mail account: %w", err)
+	}
+
+	// Update password hash in DB if new password provided
+	if password != "" {
+		hashedPw, hashErr := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if hashErr != nil {
+			return nil, fmt.Errorf("hash password: %w", hashErr)
+		}
+		_, err = s.db.Exec(ctx, `UPDATE mail_accounts SET password = $1, quota_mb = $2, updated_at = NOW() WHERE id = $3`,
+			string(hashedPw), quotaMB, id)
+	} else {
+		_, err = s.db.Exec(ctx, `UPDATE mail_accounts SET quota_mb = $1, updated_at = NOW() WHERE id = $2`,
+			quotaMB, id)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update mail account in db: %w", err)
+	}
+
+	var a models.MailAccount
+	err = s.db.QueryRow(ctx, `
+		SELECT id, domain_id, username, quota_mb, enabled, created_at
+		FROM mail_accounts WHERE id = $1
+	`, id).Scan(&a.ID, &a.DomainID, &a.Username, &a.QuotaMB, &a.Enabled, &a.CreatedAt)
+	if err != nil {
+		return nil, fmt.Errorf("fetch updated account: %w", err)
+	}
+	return &a, nil
+}
+
 // ---- Mail Aliases ----
 
 // ListAliases returns all mail aliases for a domain.

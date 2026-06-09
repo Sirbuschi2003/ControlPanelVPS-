@@ -131,6 +131,29 @@ func (h *MailHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, account)
 }
 
+// UpdateAccount handles PUT /api/mail/accounts/{id}
+func (h *MailHandler) UpdateAccount(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+	var req struct {
+		Password string `json:"password"`
+		QuotaMB  int    `json:"quota_mb"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	account, err := h.svc.UpdateAccount(r.Context(), id, req.Password, req.QuotaMB)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to update mail account: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, account)
+}
+
 // DeleteAccount handles DELETE /api/mail/accounts/{id}
 func (h *MailHandler) DeleteAccount(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")

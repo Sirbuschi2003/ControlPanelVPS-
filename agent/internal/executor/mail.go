@@ -113,6 +113,59 @@ func CreateMailAccount(email, hashedPassword string, quotaMB int) error {
 	return reloadDovecot()
 }
 
+// UpdateMailAccount changes the password and/or quota of an existing account.
+// Pass newPassword="" to keep the current password. quotaMB<=0 means unlimited.
+func UpdateMailAccount(email, newPassword string, quotaMB int) error {
+	data, err := os.ReadFile(dovecotUsersFile)
+	if os.IsNotExist(err) {
+		return fmt.Errorf("account not found: %s", email)
+	}
+	if err != nil {
+		return fmt.Errorf("reading dovecot users: %w", err)
+	}
+
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	found := false
+	for i, line := range lines {
+		if !strings.HasPrefix(line, email+":") {
+			continue
+		}
+		found = true
+
+		// Extract existing hash (everything between first and second ":")
+		rest := line[len(email)+1:]
+		colonIdx := strings.Index(rest, ":")
+		hashField := rest
+		if colonIdx != -1 {
+			hashField = rest[:colonIdx]
+		}
+
+		if newPassword != "" {
+			hashed := HashPassword(newPassword)
+			if hashed == "" {
+				return fmt.Errorf("password hashing failed")
+			}
+			hashField = "{SHA512-CRYPT}" + hashed
+		}
+
+		if quotaMB <= 0 {
+			lines[i] = fmt.Sprintf("%s:%s::::::", email, hashField)
+		} else {
+			lines[i] = fmt.Sprintf("%s:%s::::::userdb_quota_rule=*:storage=%dM", email, hashField, quotaMB)
+		}
+		break
+	}
+
+	if !found {
+		return fmt.Errorf("account not found: %s", email)
+	}
+
+	if err := os.WriteFile(dovecotUsersFile, []byte(strings.Join(lines, "\n")+"\n"), 0644); err != nil {
+		return fmt.Errorf("writing dovecot users: %w", err)
+	}
+	return reloadDovecot()
+}
+
 // DeleteMailAccount removes a virtual mailbox account.
 func DeleteMailAccount(email string) error {
 	// Remove from virtual_mailbox_maps (match the email prefix)

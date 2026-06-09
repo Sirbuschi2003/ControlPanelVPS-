@@ -76,12 +76,15 @@ func (h *Handler) registerRoutes() {
 	h.mux.HandleFunc("POST /mail/domains", auth(h.addMailDomain))
 	h.mux.HandleFunc("DELETE /mail/domains/{domain}", auth(h.removeMailDomain))
 	h.mux.HandleFunc("POST /mail/accounts", auth(h.createMailAccount))
+	h.mux.HandleFunc("PUT /mail/accounts/{email}", auth(h.updateMailAccount))
 	h.mux.HandleFunc("DELETE /mail/accounts/{email}", auth(h.deleteMailAccount))
 	h.mux.HandleFunc("POST /mail/aliases", auth(h.addAlias))
 	h.mux.HandleFunc("DELETE /mail/aliases/{source}", auth(h.removeAlias))
 	h.mux.HandleFunc("POST /mail/setup-tls", auth(h.setupMailTLS))
 	h.mux.HandleFunc("POST /mail/setup-rspamd", auth(h.setupRspamd))
 	h.mux.HandleFunc("GET /mail/rspamd/status", auth(h.rspamdStatus))
+	h.mux.HandleFunc("GET /mail/spam/config", auth(h.getSpamConfig))
+	h.mux.HandleFunc("PUT /mail/spam/config", auth(h.setSpamConfig))
 	h.mux.HandleFunc("POST /mail/dkim/{domain}", auth(h.setupDKIM))
 	h.mux.HandleFunc("GET /mail/dkim/{domain}", auth(h.getDKIMKey))
 
@@ -434,6 +437,23 @@ func (h *Handler) createMailAccount(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]string{"status": "created", "email": req.Email})
 }
 
+func (h *Handler) updateMailAccount(w http.ResponseWriter, r *http.Request) {
+	email := r.PathValue("email")
+	var req struct {
+		Password string `json:"password"`
+		QuotaMB  int    `json:"quota_mb"`
+	}
+	if err := decodeBody(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := executor.UpdateMailAccount(email, req.Password, req.QuotaMB); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated", "email": email})
+}
+
 func (h *Handler) deleteMailAccount(w http.ResponseWriter, r *http.Request) {
 	email := r.PathValue("email")
 	if err := executor.DeleteMailAccount(email); err != nil {
@@ -777,12 +797,34 @@ func (h *Handler) setupRspamd(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) rspamdStatus(w http.ResponseWriter, r *http.Request) {
-	stats, err := executor.GetRspamdStatus()
+	stats, err := executor.GetRspamdStats()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) getSpamConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := executor.GetSpamConfig()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (h *Handler) setSpamConfig(w http.ResponseWriter, r *http.Request) {
+	var cfg executor.SpamConfig
+	if err := decodeBody(r, &cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if err := executor.SetSpamConfig(cfg); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
 }
 
 func (h *Handler) setupDKIM(w http.ResponseWriter, r *http.Request) {
